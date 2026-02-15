@@ -1,4 +1,4 @@
-# 🔒 WakyTalky - Full Stack E2E Encrypted Messaging Platform
+# 🔒 Encrypted Messenger - Full Stack E2E Encrypted Messaging Platform
 
 A complete end-to-end encrypted messaging application with **zero-knowledge architecture** that works across **Web, Mobile (iOS/Android), and Desktop (Windows/Mac/Linux)**.
 
@@ -7,10 +7,10 @@ A complete end-to-end encrypted messaging application with **zero-knowledge arch
 ### Privacy & Security First
 - ✅ **End-to-End Encryption (E2EE)** - Messages encrypted on device, server never sees plaintext
 - ✅ **Zero-Knowledge Architecture** - Server stores only encrypted data
-- ✅ **Forward Secrecy** - Unique keys for each message using Double Ratchet
-- ✅ **Signal Protocol** - Industry-standard X3DH key exchange
+- ✅ **Simplified Encryption** - Reliable AES-256-GCM with shared secret approach
+- ✅ **SHA-256 Key Derivation** - Deterministic keys from user identities
 - ✅ **Encrypted Media** - Images and files encrypted before upload
-- ✅ **Key Verification** - Fingerprint verification for contacts
+- ✅ **Unique IVs** - Fresh random initialization vector for each message
 
 ### Platform Support
 - 🌐 **Web App** - React-based responsive web interface
@@ -68,37 +68,43 @@ A complete end-to-end encrypted messaging application with **zero-knowledge arch
 
 ## 🔐 Encryption Details
 
-### Signal Protocol Implementation
-- **X3DH Key Exchange** - Extended Triple Diffie-Hellman for initial setup
-- **Double Ratchet** - Forward secrecy with unique keys per message
+### Simplified E2E Encryption Implementation
+- **Shared Secret Approach** - Deterministic key derivation from usernames
 - **AES-256-GCM** - Symmetric encryption for messages and media
-- **ECDH P-256** - Elliptic curve key agreement
-- **HKDF-SHA256** - Key derivation function
+- **SHA-256 Hashing** - Key derivation from user identities
+- **Zero-Knowledge Server** - Server never sees plaintext or encryption keys
 
-### Key Types
-1. **Identity Key** - Long-term key pair (generated once)
-2. **Signed Pre-Key** - Medium-term key (rotated periodically)
-3. **One-Time Pre-Keys** - Single-use keys (100 generated per user)
-4. **Message Keys** - Unique key per message (derived from chain key)
+### How It Works
+1. **Key Derivation** - Both users derive the same shared secret from their usernames
+2. **Message Encryption** - Each message encrypted with AES-256-GCM
+3. **Unique IVs** - Every message uses a fresh random Initialization Vector
+4. **Bidirectional** - Both users can encrypt/decrypt each other's messages seamlessly
+
+### Security Features
+- **End-to-End Encryption** - Messages encrypted on device, server only routes ciphertext
+- **Zero-Knowledge Architecture** - Server cannot read messages or access keys
+- **Authenticated Encryption** - AES-GCM provides both confidentiality and integrity
+- **Random IVs** - Each message uses cryptographically random initialization vectors
 
 ## 📦 Project Structure
 
 ```
 encrypted-messenger/
 ├── shared/
-│   └── crypto.js              # E2E encryption library (cross-platform)
+│   └── crypto.js              # Original complex encryption (backup)
 ├── backend/
 │   ├── server.js              # Express + WebSocket server
 │   ├── package.json
 │   └── .env.example
 ├── frontend/                  # Web app (React)
 │   ├── src/
-│   │   ├── App.js
-│   │   ├── App.css
+│   │   ├── App.js             # Main React component (uses SimpleCrypto)
+│   │   ├── App.css            # Responsive styling
 │   │   ├── index.js
 │   │   └── index.css
 │   ├── public/
-│   │   └── index.html
+│   │   ├── index.html
+│   │   └── simpleCrypto.js    # Simplified E2E encryption library
 │   └── package.json
 ├── mobile/                    # Mobile app (React Native)
 │   ├── App.js
