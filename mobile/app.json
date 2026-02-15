@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#667eea"
+      "backgroundColor": "#3d5a80"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -21,12 +21,9 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#667eea"
+        "backgroundColor": "#3d5a80"
       },
       "package": "com.wakytalky.app"
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
     },
     "extra": {
       "apiUrl": "https://whatsdown.up.railway.app",

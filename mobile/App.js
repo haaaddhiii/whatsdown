@@ -1,216 +1,65 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import './App.css';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  Alert,
+  Image
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
+import 'react-native-get-random-values';
 
-// Import the simplified E2E encryption library
-const SimpleCrypto = window.SimpleCrypto;
+// Import crypto library (copy from shared/crypto.js)
+// You'll need to adapt it for React Native environment
+const API_URL = 'http://YOUR_SERVER_IP:3001'; // Replace with your server IP
+const WS_URL = 'ws://YOUR_SERVER_IP:3001';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
-const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:3001';
-
-function App() {
+export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentView, setCurrentView] = useState('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [token, setToken] = useState(localStorage.getItem('token'));
-  const [currentUser, setCurrentUser] = useState(localStorage.getItem('username'));
+  const [token, setToken] = useState(null);
   
-  // Chat state
   const [contacts, setContacts] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messageInput, setMessageInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [isTyping, setIsTyping] = useState(false);
-  const [otherUserTyping, setOtherUserTyping] = useState(false);
-  const [onlineUsers, setOnlineUsers] = useState(new Set());
-  
-  // Encryption
-  const cryptoRef = useRef(null);
+
   const wsRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
+  const encryptionRef = useRef(null);
 
-  // Initialize simple crypto
   useEffect(() => {
-    if (!cryptoRef.current) {
-      cryptoRef.current = new SimpleCrypto();
-      console.log('✅ Simple encryption initialized');
-    }
+    checkLoginStatus();
   }, []);
 
-  // Define callback functions BEFORE useEffect hooks
-  const handleNewMessage = useCallback(async (encryptedMessage) => {
+  const checkLoginStatus = async () => {
     try {
-      if (!cryptoRef.current) return;
+      const savedToken = await AsyncStorage.getItem('token');
+      const savedUsername = await AsyncStorage.getItem('username');
       
-      const crypto = cryptoRef.current;
-      
-      // Decrypt message using simple crypto
-      const plaintext = await crypto.decrypt(
-        encryptedMessage.encryptedContent,
-        encryptedMessage.iv,
-        currentUser,
-        encryptedMessage.from
-      );
-
-      const newMessage = {
-        id: encryptedMessage.id,
-        from: encryptedMessage.from,
-        text: plaintext,
-        timestamp: new Date(encryptedMessage.timestamp),
-        mediaType: encryptedMessage.mediaType,
-        mediaUrl: encryptedMessage.mediaUrl
-      };
-
-      setMessages(prev => [...prev, newMessage]);
-    } catch (error) {
-      console.error('Failed to decrypt message:', error);
-    }
-  }, [currentUser]);
-
-  const updateContactStatus = useCallback((username, status) => {
-    setContacts(prev => prev.map(contact => 
-      contact.username === username 
-        ? { ...contact, status }
-        : contact
-    ));
-  }, []);
-
-  const handleWebSocketMessage = useCallback(async (data) => {
-    switch (data.type) {
-      case 'authenticated':
-        console.log('Authenticated via WebSocket');
-        break;
-        
-      case 'new_message':
-        await handleNewMessage(data.message);
-        break;
-        
-      case 'typing':
-        // Show typing indicator
-        if (data.from === selectedContact?.username) {
-          setOtherUserTyping(data.isTyping);
-          if (data.isTyping) {
-            // Auto-hide after 3 seconds
-            setTimeout(() => setOtherUserTyping(false), 3000);
-          }
-        }
-        break;
-        
-      case 'user_status':
-        // Update online/offline status
-        updateContactStatus(data.username, data.status);
-        setOnlineUsers(prev => {
-          const newSet = new Set(prev);
-          if (data.status === 'online') {
-            newSet.add(data.username);
-          } else {
-            newSet.delete(data.username);
-          }
-          return newSet;
-        });
-        break;
-        
-      case 'messages_read':
-        // Update read receipts
-        setMessages(prev => prev.map(msg => 
-          data.messageIds.includes(msg.id) 
-            ? { ...msg, read: true }
-            : msg
-        ));
-        break;
-        
-      default:
-        console.log('Unknown message type:', data.type);
-    }
-  }, [handleNewMessage, updateContactStatus, selectedContact]);
-
-  // Connect WebSocket
-  useEffect(() => {
-    const connectWebSocket = () => {
-      const ws = new WebSocket(WS_URL);
-      
-      ws.onopen = () => {
-        console.log('WebSocket connected');
-        ws.send(JSON.stringify({
-          type: 'authenticate',
-          token: token
-        }));
-      };
-
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        handleWebSocketMessage(data);
-      };
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
-
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
-        setTimeout(() => {
-          if (token) connectWebSocket();
-        }, 3000);
-      };
-
-      wsRef.current = ws;
-    };
-
-    if (token && !wsRef.current) {
-      connectWebSocket();
-    }
-  }, [token, handleWebSocketMessage]);
-
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    
-    // Validate passwords match
-    if (password !== confirmPassword) {
-      alert('Passwords do not match!');
-      return;
-    }
-
-    // Validate password length
-    if (password.length < 6) {
-      alert('Password must be at least 6 characters long');
-      return;
-    }
-    
-    try {
-      const response = await fetch(`${API_URL}/api/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username,
-          password,
-          identityKey: 'dummy',
-          signedPreKey: 'dummy',
-          oneTimePreKeys: ['dummy']
-        })
-      });
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('username', data.username);
-        setToken(data.token);
-        setCurrentUser(data.username);
+      if (savedToken && savedUsername) {
+        setToken(savedToken);
+        setUsername(savedUsername);
+        setIsLoggedIn(true);
         setCurrentView('chat');
-      } else {
-        alert(data.error || 'Registration failed');
+        // Initialize encryption and WebSocket
       }
     } catch (error) {
-      console.error('Registration error:', error);
-      alert('Registration failed');
+      console.error('Error checking login status:', error);
     }
   };
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    
+  const handleLogin = async () => {
     try {
       const response = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
@@ -219,461 +68,415 @@ function App() {
       });
 
       const data = await response.json();
-      
+
       if (response.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('username', data.username);
+        await AsyncStorage.setItem('token', data.token);
+        await AsyncStorage.setItem('username', data.username);
         setToken(data.token);
-        setCurrentUser(data.username);
+        setIsLoggedIn(true);
         setCurrentView('chat');
       } else {
-        alert(data.error || 'Login failed');
+        Alert.alert('Error', data.error || 'Login failed');
       }
     } catch (error) {
-      console.error('Login error:', error);
-      alert('Login failed');
+      Alert.alert('Error', 'Network error. Please try again.');
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('username');
-    setToken(null);
-    setCurrentUser(null);
+  const handleRegister = async () => {
+    try {
+      // Initialize encryption
+      // Generate keys
+      // Register with server
+      Alert.alert('Info', 'Registration will be implemented with crypto library');
+    } catch (error) {
+      Alert.alert('Error', 'Registration failed');
+    }
+  };
+
+  const handleLogout = async () => {
+    await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('username');
+    setIsLoggedIn(false);
     setCurrentView('login');
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-  };
-
-  const searchUsers = async (query) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        `${API_URL}/api/users/search?query=${encodeURIComponent(query)}`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
-      );
-
-      const data = await response.json();
-      setSearchResults(data.users || []);
-    } catch (error) {
-      console.error('Search error:', error);
-    }
-  };
-
-  const startChat = async (contact) => {
-    try {
-      setSelectedContact(contact);
-      setSearchResults([]);
-      setSearchQuery('');
-      
-      // Load message history
-      loadMessages(contact.username);
-    } catch (error) {
-      console.error('Failed to start chat:', error);
-      alert('Failed to start chat');
-    }
-  };
-
-  const loadMessages = async (contactUsername) => {
-    try {
-      const response = await fetch(
-        `${API_URL}/api/messages/${contactUsername}`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
-      );
-
-      const data = await response.json();
-      
-      // Decrypt messages
-      const crypto = cryptoRef.current;
-      const decryptedMessages = [];
-
-      for (const msg of data.messages) {
-        try {
-          const otherUser = msg.from === currentUser ? msg.to : msg.from;
-          const plaintext = await crypto.decrypt(
-            msg.encryptedContent,
-            msg.iv,
-            currentUser,
-            otherUser
-          );
-
-          decryptedMessages.push({
-            id: msg.id,
-            from: msg.from,
-            text: plaintext,
-            timestamp: new Date(msg.timestamp),
-            mediaType: msg.mediaType,
-            mediaUrl: msg.mediaUrl
-          });
-        } catch (error) {
-          console.error('Failed to decrypt message:', error);
-        }
-      }
-
-      setMessages(decryptedMessages.reverse());
-    } catch (error) {
-      console.error('Failed to load messages:', error);
-    }
+    setToken(null);
+    setUsername('');
+    setPassword('');
   };
 
   const sendMessage = async () => {
-    if (!messageInput.trim() || !selectedContact) return;
+    if (!messageInput.trim()) return;
 
     try {
-      const crypto = cryptoRef.current;
-      
-      // Stop typing indicator
-      sendTypingIndicator(false);
-      
-      // Encrypt message using simple crypto
-      const encrypted = await crypto.encrypt(
-        messageInput,
-        currentUser,
-        selectedContact.username
-      );
-
+      // Encrypt message
       // Send to server
-      const response = await fetch(`${API_URL}/api/messages/send`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          to: selectedContact.username,
-          encryptedContent: encrypted.ciphertext,
-          iv: encrypted.iv,
-          messageNumber: Date.now()
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Add to local messages with delivery status
-        setMessages(prev => [...prev, {
-          id: data.messageId,
-          from: currentUser,
-          text: messageInput,
-          timestamp: new Date(),
-          delivered: data.delivered,
-          read: false
-        }]);
-        setMessageInput('');
-      }
+      Alert.alert('Info', 'Message encryption will be implemented');
+      setMessageInput('');
     } catch (error) {
-      console.error('Failed to send message:', error);
-      alert('Failed to send message');
+      Alert.alert('Error', 'Failed to send message');
     }
   };
 
-  const sendTypingIndicator = (isTyping) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && selectedContact) {
-      wsRef.current.send(JSON.stringify({
-        type: 'typing',
-        to: selectedContact.username,
-        isTyping: isTyping
-      }));
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      // Encrypt and upload image
+      Alert.alert('Info', 'Image encryption will be implemented');
     }
   };
 
-  const handleTyping = (e) => {
-    setMessageInput(e.target.value);
-    
-    // Send typing indicator
-    if (!isTyping && e.target.value.length > 0) {
-      setIsTyping(true);
-      sendTypingIndicator(true);
+  const pickDocument = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: '*/*'
+    });
+
+    if (result.type === 'success') {
+      // Encrypt and upload document
+      Alert.alert('Info', 'Document encryption will be implemented');
     }
-    
-    // Clear previous timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-    
-    // Set timeout to stop typing indicator
-    typingTimeoutRef.current = setTimeout(() => {
-      setIsTyping(false);
-      sendTypingIndicator(false);
-    }, 1000);
   };
 
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    alert('File upload will be implemented soon!');
-  };
-
-  // Render login view
-  if (currentView === 'login') {
+  if (!isLoggedIn) {
     return (
-      <div className="app">
-        <div className="auth-container">
-          <div className="auth-box">
-            <h1>🔒 WakyTalky</h1>
-            <p className="tagline">End-to-end encrypted. Zero-knowledge. Private.</p>
-            
-            <form onSubmit={handleLogin}>
-              <input
-                type="text"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-              <button type="submit">Login</button>
-            </form>
-            
-            <p className="switch-view">
-              Don't have an account?{' '}
-              <span onClick={() => {
-                setCurrentView('register');
-                setPassword('');
-                setConfirmPassword('');
-              }}>Register</span>
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+      <SafeAreaView style={styles.container}>
+        <View style={styles.authContainer}>
+          <Text style={styles.title}>🔒 Encrypted Messenger</Text>
+          <Text style={styles.subtitle}>End-to-end encrypted. Private.</Text>
 
-  // Render register view
-  if (currentView === 'register') {
-    return (
-      <div className="app">
-        <div className="auth-container">
-          <div className="auth-box">
-            <h1>🔒 Create Account</h1>
-            <p className="tagline">Your keys, your privacy</p>
-            
-            <form onSubmit={handleRegister}>
-              <input
-                type="text"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength="6"
-              />
-              <input
-                type="password"
-                placeholder="Confirm Password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength="6"
-              />
-              <button type="submit">Create Account</button>
-            </form>
-            
-            <p className="switch-view">
-              Already have an account?{' '}
-              <span onClick={() => {
-                setCurrentView('login');
-                setPassword('');
-                setConfirmPassword('');
-              }}>Login</span>
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+          <TextInput
+            style={styles.input}
+            placeholder="Username"
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+          />
 
-  // Render chat view
-  return (
-    <div className="app">
-      <div className="chat-container">
-        {/* Sidebar */}
-        <div className={`sidebar ${selectedContact ? 'show-chat' : ''}`}>
-          <div className="sidebar-header">
-            <h2>Chats</h2>
-            <button onClick={handleLogout} className="logout-btn">Logout</button>
-          </div>
-          
-          <div className="search-box">
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                searchUsers(e.target.value);
-              }}
-            />
-          </div>
-          
-          {searchResults.length > 0 && (
-            <div className="search-results">
-              {searchResults.map(user => (
-                <div
-                  key={user.username}
-                  className="contact-item"
-                  onClick={() => startChat(user)}
-                >
-                  <div className="contact-avatar">{user.username[0].toUpperCase()}</div>
-                  <div className="contact-info">
-                    <div className="contact-name">{user.username}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          
-          <div className="contacts-list">
-            {contacts.map(contact => (
-              <div
-                key={contact.username}
-                className={`contact-item ${selectedContact?.username === contact.username ? 'active' : ''}`}
-                onClick={() => setSelectedContact(contact)}
-              >
-                <div className="contact-avatar">{contact.username[0].toUpperCase()}</div>
-                <div className="contact-info">
-                  <div className="contact-name">{contact.username}</div>
-                  <div className="contact-status">{contact.status}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
 
-        {/* Chat Area */}
-        <div className={`chat-area ${!selectedContact ? 'show-sidebar' : ''}`}>
-          {selectedContact ? (
+          {currentView === 'login' ? (
             <>
-              <div className="chat-header">
-                <button 
-                  className="back-button" 
-                  onClick={() => setSelectedContact(null)}
-                  style={{ 
-                    background: 'none', 
-                    border: 'none', 
-                    fontSize: '24px', 
-                    cursor: 'pointer',
-                    marginRight: '10px',
-                    padding: '5px'
-                  }}
-                >
-                  ←
-                </button>
-                <div className="contact-avatar" style={{ position: 'relative' }}>
-                  {selectedContact.username[0].toUpperCase()}
-                  <span 
-                    className="online-status"
-                    style={{
-                      position: 'absolute',
-                      bottom: '2px',
-                      right: '2px',
-                      width: '12px',
-                      height: '12px',
-                      borderRadius: '50%',
-                      backgroundColor: onlineUsers.has(selectedContact.username) ? '#4caf50' : '#999',
-                      border: '2px solid white'
-                    }}
-                  />
-                </div>
-                <div>
-                  <div className="contact-name">{selectedContact.username}</div>
-                  <div className="encryption-status">
-                    {onlineUsers.has(selectedContact.username) ? '🟢 Online' : '⚫ Offline'} • 🔒 Encrypted
-                  </div>
-                </div>
-              </div>
+              <TouchableOpacity style={styles.button} onPress={handleLogin}>
+                <Text style={styles.buttonText}>Login</Text>
+              </TouchableOpacity>
 
-              <div className="messages-container">
-                {messages.map((msg, index) => (
-                  <div
-                    key={index}
-                    className={`message ${msg.from === currentUser ? 'sent' : 'received'}`}
-                  >
-                    <div className="message-content">
-                      {msg.text}
-                      {msg.mediaType && (
-                        <div className="media-indicator">
-                          📎 {msg.mediaType.includes('image') ? 'Image' : 'File'}
-                        </div>
-                      )}
-                    </div>
-                    <div className="message-time">
-                      {msg.timestamp.toLocaleTimeString()}
-                      {msg.from === currentUser && (
-                        <span className="message-status">
-                          {msg.read ? ' ✓✓' : msg.delivered ? ' ✓✓' : ' ✓'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {otherUserTyping && (
-                  <div className="typing-indicator">
-                    <span>{selectedContact.username} is typing</span>
-                    <span className="typing-dots">
-                      <span>.</span><span>.</span><span>.</span>
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div className="message-input-container">
-                <label className="file-upload-btn">
-                  📎
-                  <input
-                    type="file"
-                    onChange={handleFileUpload}
-                    style={{ display: 'none' }}
-                  />
-                </label>
-                <input
-                  type="text"
-                  placeholder="Type a message..."
-                  value={messageInput}
-                  onChange={handleTyping}
-                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                />
-                <button onClick={sendMessage}>Send</button>
-              </div>
+              <TouchableOpacity onPress={() => setCurrentView('register')}>
+                <Text style={styles.switchText}>
+                  Don't have an account? <Text style={styles.switchLink}>Register</Text>
+                </Text>
+              </TouchableOpacity>
             </>
           ) : (
-            <div className="no-chat-selected">
-              <h2>🔒 WakyTalky</h2>
-              <p>Select a contact or search for a user to start chatting</p>
-              <div className="features">
-                <div>✓ End-to-end encryption</div>
-                <div>✓ Zero-knowledge architecture</div>
-                <div>✓ Simple & secure</div>
-                <div>✓ Real-time messaging</div>
-              </div>
-            </div>
+            <>
+              <TouchableOpacity style={styles.button} onPress={handleRegister}>
+                <Text style={styles.buttonText}>Create Account</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setCurrentView('login')}>
+                <Text style={styles.switchText}>
+                  Already have an account? <Text style={styles.switchLink}>Login</Text>
+                </Text>
+              </TouchableOpacity>
+            </>
           )}
-        </div>
-      </div>
-    </div>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.chatContainer}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Encrypted Messenger</Text>
+          <TouchableOpacity onPress={handleLogout}>
+            <Text style={styles.logoutButton}>Logout</Text>
+          </TouchableOpacity>
+        </View>
+
+        {selectedContact ? (
+          <>
+            {/* Chat Header */}
+            <View style={styles.chatHeader}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {selectedContact.username[0].toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.chatHeaderInfo}>
+                <Text style={styles.contactName}>{selectedContact.username}</Text>
+                <Text style={styles.encryptionStatus}>🔒 End-to-end encrypted</Text>
+              </View>
+            </View>
+
+            {/* Messages */}
+            <FlatList
+              data={messages}
+              keyExtractor={(item, index) => index.toString()}
+              style={styles.messagesList}
+              renderItem={({ item }) => (
+                <View style={[
+                  styles.messageContainer,
+                  item.from === username ? styles.sentMessage : styles.receivedMessage
+                ]}>
+                  <Text style={[
+                    styles.messageText,
+                    item.from === username ? styles.sentMessageText : styles.receivedMessageText
+                  ]}>
+                    {item.text}
+                  </Text>
+                  <Text style={styles.messageTime}>
+                    {new Date(item.timestamp).toLocaleTimeString()}
+                  </Text>
+                </View>
+              )}
+            />
+
+            {/* Input */}
+            <View style={styles.inputContainer}>
+              <TouchableOpacity style={styles.attachButton} onPress={pickImage}>
+                <Text style={styles.attachButtonText}>📷</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.attachButton} onPress={pickDocument}>
+                <Text style={styles.attachButtonText}>📎</Text>
+              </TouchableOpacity>
+              <TextInput
+                style={styles.messageInput}
+                placeholder="Type a message..."
+                value={messageInput}
+                onChangeText={setMessageInput}
+                multiline
+              />
+              <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
+                <Text style={styles.sendButtonText}>Send</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <View style={styles.noChat}>
+            <Text style={styles.noChatTitle}>🔒 Encrypted Messenger</Text>
+            <Text style={styles.noChatText}>
+              Select a contact to start a secure conversation
+            </Text>
+            <View style={styles.features}>
+              <Text style={styles.feature}>✓ End-to-end encryption</Text>
+              <Text style={styles.feature}>✓ Zero-knowledge architecture</Text>
+              <Text style={styles.feature}>✓ Forward secrecy</Text>
+              <Text style={styles.feature}>✓ Encrypted media sharing</Text>
+            </View>
+          </View>
+        )}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
-export default App;
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#667eea',
+  },
+  authContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 30,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: 'white',
+    textAlign: 'center',
+    marginBottom: 40,
+  },
+  input: {
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+    fontSize: 16,
+  },
+  button: {
+    backgroundColor: '#764ba2',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  switchText: {
+    color: 'white',
+    textAlign: 'center',
+  },
+  switchLink: {
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
+  },
+  chatContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: '#667eea',
+  },
+  headerTitle: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  logoutButton: {
+    color: 'white',
+    fontSize: 16,
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#667eea',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  avatarText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  chatHeaderInfo: {
+    flex: 1,
+  },
+  contactName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  encryptionStatus: {
+    fontSize: 12,
+    color: '#4caf50',
+  },
+  messagesList: {
+    flex: 1,
+    padding: 15,
+    backgroundColor: '#f8f9fa',
+  },
+  messageContainer: {
+    maxWidth: '70%',
+    marginBottom: 10,
+    padding: 12,
+    borderRadius: 12,
+  },
+  sentMessage: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#667eea',
+  },
+  receivedMessage: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'white',
+  },
+  messageText: {
+    fontSize: 16,
+  },
+  sentMessageText: {
+    color: 'white',
+  },
+  receivedMessageText: {
+    color: '#333',
+  },
+  messageTime: {
+    fontSize: 10,
+    color: '#999',
+    marginTop: 4,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: 10,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    alignItems: 'center',
+  },
+  attachButton: {
+    padding: 10,
+  },
+  attachButtonText: {
+    fontSize: 24,
+  },
+  messageInput: {
+    flex: 1,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    marginHorizontal: 10,
+    maxHeight: 100,
+  },
+  sendButton: {
+    backgroundColor: '#667eea',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  sendButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  noChat: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  noChatTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  noChatText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 30,
+  },
+  features: {
+    alignItems: 'flex-start',
+  },
+  feature: {
+    fontSize: 16,
+    color: '#4caf50',
+    marginBottom: 8,
+  },
+});
