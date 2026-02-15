@@ -25,10 +25,36 @@ function App() {
   // Encryption
   const encryptionRef = useRef(null);
   const wsRef = useRef(null);
-  const [isEncryptionReady, setIsEncryptionReady] = useState(false);
 
   // Initialize encryption on mount
   useEffect(() => {
+    const initializeEncryption = async () => {
+      try {
+        const crypto = new E2EEncryption();
+        
+        // Load existing keys or generate new ones
+        const storedKeys = localStorage.getItem(`keys_${currentUser}`);
+        
+        if (storedKeys) {
+          // Load existing keys (you'd implement import functions)
+          console.log('Loading existing keys...');
+        } else {
+          // Generate new keys
+          await crypto.generateIdentityKeyPair();
+          await crypto.generateSignedPreKey();
+          await crypto.generateOneTimePreKeys(100);
+          
+          // Store keys securely (in production, consider IndexedDB with encryption)
+          // For demo, we're storing in localStorage (NOT RECOMMENDED for production)
+          console.log('Keys generated successfully');
+        }
+        
+        encryptionRef.current = crypto;
+      } catch (error) {
+        console.error('Encryption initialization failed:', error);
+      }
+    };
+
     if (currentUser && !encryptionRef.current) {
       initializeEncryption();
     }
@@ -36,69 +62,41 @@ function App() {
 
   // Connect WebSocket
   useEffect(() => {
+    const connectWebSocket = () => {
+      const ws = new WebSocket(WS_URL);
+      
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        ws.send(JSON.stringify({
+          type: 'authenticate',
+          token: token
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        handleWebSocketMessage(data);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        // Reconnect after 3 seconds
+        setTimeout(() => {
+          if (token) connectWebSocket();
+        }, 3000);
+      };
+
+      wsRef.current = ws;
+    };
+
     if (token && !wsRef.current) {
       connectWebSocket();
     }
   }, [token]);
-
-  const initializeEncryption = async () => {
-    try {
-      const crypto = new E2EEncryption();
-      
-      // Load existing keys or generate new ones
-      const storedKeys = localStorage.getItem(`keys_${currentUser}`);
-      
-      if (storedKeys) {
-        // Load existing keys (you'd implement import functions)
-        console.log('Loading existing keys...');
-      } else {
-        // Generate new keys
-        await crypto.generateIdentityKeyPair();
-        await crypto.generateSignedPreKey();
-        await crypto.generateOneTimePreKeys(100);
-        
-        // Store keys securely (in production, consider IndexedDB with encryption)
-        // For demo, we're storing in localStorage (NOT RECOMMENDED for production)
-        console.log('Keys generated successfully');
-      }
-      
-      encryptionRef.current = crypto;
-      setIsEncryptionReady(true);
-    } catch (error) {
-      console.error('Encryption initialization failed:', error);
-    }
-  };
-
-  const connectWebSocket = () => {
-    const ws = new WebSocket(WS_URL);
-    
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-      ws.send(JSON.stringify({
-        type: 'authenticate',
-        token: token
-      }));
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      handleWebSocketMessage(data);
-    };
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-      // Reconnect after 3 seconds
-      setTimeout(() => {
-        if (token) connectWebSocket();
-      }, 3000);
-    };
-
-    wsRef.current = ws;
-  };
 
   const handleWebSocketMessage = async (data) => {
     switch (data.type) {
