@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "WakyTalky",
-    "slug": "WakyTalky",
+    "slug": "wakytalky",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,30 +16,21 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.encrypted.messenger",
-      "infoPlist": {
-        "NSCameraUsageDescription": "We need camera access to send photos",
-        "NSPhotoLibraryUsageDescription": "We need photo library access to send images"
-      }
+      "bundleIdentifier": "com.wakytalky.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#667eea"
       },
-      "package": "com.encrypted.messenger",
-      "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
-      ]
+      "package": "com.wakytalky.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
       "apiUrl": "https://whatsdown.up.railway.app",
-      "wsUrl": "wss://whatsdown.up.railway.app"
+      "wsUrl": "wss://whatsdown.up.railway.app",
     }
   }
 }
