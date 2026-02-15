@@ -424,7 +424,8 @@ class E2EEncryption {
 
     return {
       ...encrypted,
-      messageNumber: session.messageNumber
+      messageNumber: session.messageNumber,
+      ephemeralPublicKey: session.ephemeralPublicKey
     };
   }
 

@@ -424,7 +424,8 @@ function App() {
           to: selectedContact.username,
           encryptedContent: encrypted.ciphertext,
           iv: encrypted.iv,
-          messageNumber: encrypted.messageNumber
+          messageNumber: encrypted.messageNumber,
+          ephemeralKey: encrypted.ephemeralPublicKey
         })
       });
 

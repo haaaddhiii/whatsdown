@@ -38,12 +38,12 @@ async function testFix() {
     const encryptedParams = await alice.sendMessage('bob', plaintext);
 
     // Simulate network transmission
-    // Message payload contains: encryptedContent, iv, ephemeralKey (from createSession return)
+    // Message payload contains: encryptedContent, iv, ephemeralKey (from sendMessage return)
     const messagePayload = {
         from: 'alice',
         encryptedContent: encryptedParams.ciphertext,
         iv: encryptedParams.iv,
-        ephemeralKey: ephemeralPublicKey, // Sent via WebSocket
+        ephemeralKey: encryptedParams.ephemeralPublicKey, // Now returned by sendMessage
         messageNumber: encryptedParams.messageNumber
     };
 
