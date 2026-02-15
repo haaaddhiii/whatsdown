@@ -27,7 +27,7 @@
     },
     "extra": {
       "apiUrl": "https://whatsdown.up.railway.app",
-      "wsUrl": "wss://whatsdown.up.railway.app",
+      "wsUrl": "wss://whatsdown.up.railway.app"
     }
   }
 }
