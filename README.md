@@ -1,4 +1,4 @@
-# 🔒 Encrypted Messenger - Full Stack E2E Encrypted Messaging Platform
+# 🔒 WakyTalky - Full Stack E2E Encrypted Messaging Platform
 
 A complete end-to-end encrypted messaging application with **zero-knowledge architecture** that works across **Web, Mobile (iOS/Android), and Desktop (Windows/Mac/Linux)**.
 
