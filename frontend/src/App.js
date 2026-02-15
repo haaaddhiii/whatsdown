@@ -13,7 +13,7 @@ function App() {
   const [password, setPassword] = useState('');
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [currentUser, setCurrentUser] = useState(localStorage.getItem('username'));
-  
+
   // Chat state
   const [contacts, setContacts] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
@@ -21,7 +21,7 @@ function App() {
   const [messageInput, setMessageInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  
+
   // Encryption
   const encryptionRef = useRef(null);
   const wsRef = useRef(null);
@@ -30,9 +30,9 @@ function App() {
   const handleNewMessage = useCallback(async (encryptedMessage) => {
     try {
       if (!encryptionRef.current) return;
-      
+
       const crypto = encryptionRef.current;
-      
+
       // Decrypt message
       const plaintext = await crypto.receiveMessage(
         encryptedMessage.from,
@@ -52,14 +52,65 @@ function App() {
       };
 
       setMessages(prev => [...prev, newMessage]);
+      setMessages(prev => [...prev, newMessage]);
     } catch (error) {
       console.error('Failed to decrypt message:', error);
+
+      // Try to establish session if missing
+      if (error.message.includes('No session') && encryptedMessage.ephemeralKey) {
+        try {
+          console.log('Attempting to establish session from received message...');
+          const crypto = encryptionRef.current;
+
+          // Fetch sender's identity key
+          const response = await fetch(
+            `${API_URL}/api/users/${encryptedMessage.from}/keys`,
+            {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }
+          );
+
+          if (!response.ok) throw new Error('Failed to fetch sender keys');
+
+          const keys = await response.json();
+          const senderIdentityKey = await crypto.importPublicKey(keys.identityKey);
+          const sendingEphemeralKey = await crypto.importPublicKey(encryptedMessage.ephemeralKey);
+
+          await crypto.createReceiveSession(
+            encryptedMessage.from,
+            senderIdentityKey,
+            sendingEphemeralKey
+          );
+
+          // Retry decryption
+          const plaintext = await crypto.receiveMessage(
+            encryptedMessage.from,
+            {
+              ciphertext: encryptedMessage.encryptedContent,
+              iv: encryptedMessage.iv
+            }
+          );
+
+          const newMessage = {
+            id: encryptedMessage.id,
+            from: encryptedMessage.from,
+            text: plaintext,
+            timestamp: new Date(encryptedMessage.timestamp),
+            mediaType: encryptedMessage.mediaType,
+            mediaUrl: encryptedMessage.mediaUrl
+          };
+
+          setMessages(prev => [...prev, newMessage]);
+        } catch (retryError) {
+          console.error('Retry decryption failed:', retryError);
+        }
+      }
     }
-  }, []);
+  }, [token]);
 
   const updateContactStatus = useCallback((username, status) => {
-    setContacts(prev => prev.map(contact => 
-      contact.username === username 
+    setContacts(prev => prev.map(contact =>
+      contact.username === username
         ? { ...contact, status }
         : contact
     ));
@@ -70,22 +121,22 @@ function App() {
       case 'authenticated':
         console.log('Authenticated via WebSocket');
         break;
-        
+
       case 'new_message':
         // Decrypt and display new message
         await handleNewMessage(data.message);
         break;
-        
+
       case 'typing':
         // Handle typing indicator
         console.log(`${data.from} is typing...`);
         break;
-        
+
       case 'user_status':
         // Update contact status
         updateContactStatus(data.username, data.status);
         break;
-        
+
       default:
         console.log('Unknown message type:', data.type);
     }
@@ -96,10 +147,10 @@ function App() {
     const initializeEncryption = async () => {
       try {
         const crypto = new E2EEncryption();
-        
+
         // Load existing keys or generate new ones
         const storedKeys = localStorage.getItem(`keys_${currentUser}`);
-        
+
         if (storedKeys) {
           // Load existing keys (you'd implement import functions)
           console.log('Loading existing keys...');
@@ -108,12 +159,12 @@ function App() {
           await crypto.generateIdentityKeyPair();
           await crypto.generateSignedPreKey();
           await crypto.generateOneTimePreKeys(100);
-          
+
           // Store keys securely (in production, consider IndexedDB with encryption)
           // For demo, we're storing in localStorage (NOT RECOMMENDED for production)
           console.log('Keys generated successfully');
         }
-        
+
         encryptionRef.current = crypto;
       } catch (error) {
         console.error('Encryption initialization failed:', error);
@@ -129,7 +180,7 @@ function App() {
   useEffect(() => {
     const connectWebSocket = () => {
       const ws = new WebSocket(WS_URL);
-      
+
       ws.onopen = () => {
         console.log('WebSocket connected');
         ws.send(JSON.stringify({
@@ -165,17 +216,17 @@ function App() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    
+
     try {
       // Generate encryption keys
       const crypto = new E2EEncryption();
       await crypto.generateIdentityKeyPair();
       await crypto.generateSignedPreKey();
       await crypto.generateOneTimePreKeys(100);
-      
+
       // Export public keys to send to server
       const bundle = await crypto.exportIdentityBundle();
-      
+
       const response = await fetch(`${API_URL}/api/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -187,7 +238,7 @@ function App() {
       });
 
       const data = await response.json();
-      
+
       if (response.ok) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('username', data.username);
@@ -206,7 +257,7 @@ function App() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    
+
     try {
       const response = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
@@ -215,7 +266,7 @@ function App() {
       });
 
       const data = await response.json();
-      
+
       if (response.ok) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('username', data.username);
@@ -275,14 +326,17 @@ function App() {
       );
 
       const keys = await response.json();
-      
+
       // Import keys and establish session
       const crypto = encryptionRef.current;
       const identityKey = await crypto.importPublicKey(keys.identityKey);
       const signedPreKey = await crypto.importPublicKey(keys.signedPreKey);
+      const oneTimePreKey = null; // force disable OTPK for simpler X3DH
+      /*
       const oneTimePreKey = keys.oneTimePreKey 
         ? await crypto.importPublicKey(keys.oneTimePreKey)
         : null;
+      */
 
       await crypto.createSession(
         contact.username,
@@ -294,7 +348,7 @@ function App() {
       setSelectedContact(contact);
       setSearchResults([]);
       setSearchQuery('');
-      
+
       // Load message history
       loadMessages(contact.username);
     } catch (error) {
@@ -313,7 +367,7 @@ function App() {
       );
 
       const data = await response.json();
-      
+
       // Decrypt messages
       const crypto = encryptionRef.current;
       const decryptedMessages = [];
@@ -352,7 +406,7 @@ function App() {
 
     try {
       const crypto = encryptionRef.current;
-      
+
       // Encrypt message
       const encrypted = await crypto.sendMessage(
         selectedContact.username,
@@ -395,24 +449,24 @@ function App() {
 
     try {
       const crypto = encryptionRef.current;
-      
+
       // Read file
       const arrayBuffer = await file.arrayBuffer();
       const fileData = new Uint8Array(arrayBuffer);
-      
+
       // Generate message key for this file
       const session = crypto.sessions.get(selectedContact.username);
       const { messageKey, nextChainKey } = await crypto.deriveMessageKeys(session.sendingChainKey);
       session.sendingChainKey = nextChainKey;
-      
+
       // Encrypt file
       const encryptedFile = await crypto.encryptFile(fileData, messageKey);
-      
+
       // Upload encrypted file
       const formData = new FormData();
       const encryptedBlob = new Blob([encryptedFile.ciphertext]);
       formData.append('file', encryptedBlob, `${file.name}.enc`);
-      
+
       const uploadResponse = await fetch(`${API_URL}/api/media/upload`, {
         method: 'POST',
         headers: {
@@ -422,7 +476,7 @@ function App() {
       });
 
       const uploadData = await uploadResponse.json();
-      
+
       // Send message with media reference
       const textEncrypted = await crypto.sendMessage(
         selectedContact.username,
@@ -462,7 +516,7 @@ function App() {
           <div className="auth-box">
             <h1>🔒 WakyTalky</h1>
             <p className="tagline">End-to-end encrypted. Zero-knowledge. Private.</p>
-            
+
             <form onSubmit={handleLogin}>
               <input
                 type="text"
@@ -480,7 +534,7 @@ function App() {
               />
               <button type="submit">Login</button>
             </form>
-            
+
             <p className="switch-view">
               Don't have an account?{' '}
               <span onClick={() => setCurrentView('register')}>Register</span>
@@ -498,7 +552,7 @@ function App() {
           <div className="auth-box">
             <h1>🔒 Create Account</h1>
             <p className="tagline">Your keys, your privacy</p>
-            
+
             <form onSubmit={handleRegister}>
               <input
                 type="text"
@@ -516,7 +570,7 @@ function App() {
               />
               <button type="submit">Create Account</button>
             </form>
-            
+
             <p className="switch-view">
               Already have an account?{' '}
               <span onClick={() => setCurrentView('login')}>Login</span>
@@ -536,7 +590,7 @@ function App() {
             <h2>Chats</h2>
             <button onClick={handleLogout} className="logout-btn">Logout</button>
           </div>
-          
+
           <div className="search-box">
             <input
               type="text"
@@ -548,7 +602,7 @@ function App() {
               }}
             />
           </div>
-          
+
           {searchResults.length > 0 && (
             <div className="search-results">
               {searchResults.map(user => (
@@ -565,7 +619,7 @@ function App() {
               ))}
             </div>
           )}
-          
+
           <div className="contacts-list">
             {contacts.map(contact => (
               <div

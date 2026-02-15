@@ -36,7 +36,7 @@ class E2EEncryption {
       true,
       ['deriveKey', 'deriveBits']
     );
-    
+
     this.identityKeyPair = keyPair;
     return keyPair;
   }
@@ -53,7 +53,7 @@ class E2EEncryption {
       true,
       ['deriveKey', 'deriveBits']
     );
-    
+
     this.signedPreKey = keyPair;
     return keyPair;
   }
@@ -162,7 +162,7 @@ class E2EEncryption {
 
     // Derive root key using HKDF
     const rootKey = await this.hkdf(combinedDH, new Uint8Array(32), 'RootKey', 32);
-    
+
     return {
       rootKey,
       ephemeralPublicKey: await this.exportPublicKey(ephemeralKeyPair.publicKey)
@@ -203,7 +203,7 @@ class E2EEncryption {
   async deriveMessageKeys(chainKey) {
     const messageKey = await this.hkdf(chainKey, new Uint8Array(32), 'MessageKey', 32);
     const nextChainKey = await this.hkdf(chainKey, new Uint8Array(32), 'ChainKey', 32);
-    
+
     return { messageKey, nextChainKey };
   }
 
@@ -213,7 +213,7 @@ class E2EEncryption {
   async encryptMessage(plaintext, messageKey) {
     // Generate IV
     const iv = await this.generateRandomBytes(12);
-    
+
     // Import message key
     const key = await crypto.subtle.importKey(
       'raw',
@@ -277,7 +277,7 @@ class E2EEncryption {
    */
   async encryptFile(fileData, messageKey) {
     const iv = await this.generateRandomBytes(12);
-    
+
     const key = await crypto.subtle.importKey(
       'raw',
       messageKey,
@@ -352,6 +352,57 @@ class E2EEncryption {
     });
 
     return ephemeralPublicKey;
+  }
+
+  /**
+   * Create session from received message (Receiver side)
+   */
+  async createReceiveSession(contactId, senderIdentityKey, sendingEphemeralKey) {
+    // DH1 = DH(SPK_B, IK_A)
+    const dh1 = await crypto.subtle.deriveBits(
+      {
+        name: 'ECDH',
+        public: senderIdentityKey
+      },
+      this.signedPreKey.privateKey,
+      256
+    );
+
+    // DH2 = DH(IK_B, EK_A)
+    const dh2 = await crypto.subtle.deriveBits(
+      {
+        name: 'ECDH',
+        public: sendingEphemeralKey
+      },
+      this.identityKeyPair.privateKey,
+      256
+    );
+
+    // DH3 = DH(SPK_B, EK_A)
+    const dh3 = await crypto.subtle.deriveBits(
+      {
+        name: 'ECDH',
+        public: sendingEphemeralKey
+      },
+      this.signedPreKey.privateKey,
+      256
+    );
+
+    // Combine DH outputs
+    const combinedDH = new Uint8Array(dh1.byteLength + dh2.byteLength + dh3.byteLength);
+    combinedDH.set(new Uint8Array(dh1), 0);
+    combinedDH.set(new Uint8Array(dh2), dh1.byteLength);
+    combinedDH.set(new Uint8Array(dh3), dh1.byteLength + dh2.byteLength);
+
+    // Derive root key
+    const rootKey = await this.hkdf(combinedDH, new Uint8Array(32), 'RootKey', 32);
+
+    this.sessions.set(contactId, {
+      rootKey,
+      sendingChainKey: rootKey, // Initial state
+      receivingChainKey: rootKey, // Initial state
+      messageNumber: 0
+    });
   }
 
   /**
