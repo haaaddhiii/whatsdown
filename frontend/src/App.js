@@ -11,6 +11,7 @@ function App() {
   const [currentView, setCurrentView] = useState('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [currentUser, setCurrentUser] = useState(localStorage.getItem('username'));
   
@@ -134,6 +135,18 @@ function App() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      alert('Passwords do not match!');
+      return;
+    }
+
+    // Validate password length
+    if (password.length < 6) {
+      alert('Password must be at least 6 characters long');
+      return;
+    }
     
     try {
       const response = await fetch(`${API_URL}/api/register`, {
@@ -339,7 +352,7 @@ function App() {
       <div className="app">
         <div className="auth-container">
           <div className="auth-box">
-            <h1>🔒 WakyTalky</h1>
+            <h1>🔒 Encrypted Messenger</h1>
             <p className="tagline">End-to-end encrypted. Zero-knowledge. Private.</p>
             
             <form onSubmit={handleLogin}>
@@ -362,7 +375,11 @@ function App() {
             
             <p className="switch-view">
               Don't have an account?{' '}
-              <span onClick={() => setCurrentView('register')}>Register</span>
+              <span onClick={() => {
+                setCurrentView('register');
+                setPassword('');
+                setConfirmPassword('');
+              }}>Register</span>
             </p>
           </div>
         </div>
@@ -393,13 +410,26 @@ function App() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                minLength="6"
+              />
+              <input
+                type="password"
+                placeholder="Confirm Password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength="6"
               />
               <button type="submit">Create Account</button>
             </form>
             
             <p className="switch-view">
               Already have an account?{' '}
-              <span onClick={() => setCurrentView('login')}>Login</span>
+              <span onClick={() => {
+                setCurrentView('login');
+                setPassword('');
+                setConfirmPassword('');
+              }}>Login</span>
             </p>
           </div>
         </div>
@@ -532,7 +562,7 @@ function App() {
             </>
           ) : (
             <div className="no-chat-selected">
-              <h2>🔒 WakyTalky</h2>
+              <h2>🔒 Encrypted Messenger</h2>
               <p>Select a contact or search for a user to start chatting</p>
               <div className="features">
                 <div>✓ End-to-end encryption</div>
