@@ -5,7 +5,17 @@
  */
 
 // Using SubtleCrypto API (available in browsers and Node.js 15+)
-const crypto = typeof window !== 'undefined' ? window.crypto : require('crypto').webcrypto;
+let crypto;
+if (typeof window !== 'undefined' && window.crypto) {
+  crypto = window.crypto;
+} else {
+  // Use require only in Node.js environment
+  try {
+    crypto = require('crypto').webcrypto;
+  } catch (e) {
+    console.error('Crypto API not available');
+  }
+}
 
 class E2EEncryption {
   constructor() {
