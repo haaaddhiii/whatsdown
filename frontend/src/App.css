@@ -32,6 +32,7 @@ body {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   width: 100%;
   max-width: 400px;
+  margin: 20px; /* Add margin for small screens */
 }
 
 .auth-box h1 {
@@ -373,6 +374,39 @@ body {
 
 /* Responsive */
 @media (max-width: 768px) {
+  /* Auth box adjustments for mobile */
+  .auth-box {
+    padding: 30px 25px;
+    margin: 20px;
+    max-width: 90%;
+    border-radius: 12px;
+  }
+
+  .auth-box h1 {
+    font-size: 24px;
+    margin-bottom: 8px;
+  }
+
+  .tagline {
+    font-size: 13px;
+    margin-bottom: 25px;
+  }
+
+  .auth-box input {
+    padding: 13px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  .auth-box button {
+    padding: 13px;
+    font-size: 16px;
+  }
+
+  .switch-view {
+    font-size: 14px;
+    margin-top: 15px;
+  }
+
   .sidebar {
     width: 100%;
     position: absolute;
@@ -454,7 +488,28 @@ body {
 /* Extra small phones */
 @media (max-width: 375px) {
   .auth-box {
-    padding: 30px 20px;
+    padding: 25px 20px;
+    margin: 15px;
+    max-width: 340px;
+  }
+
+  .auth-box h1 {
+    font-size: 24px;
+  }
+
+  .tagline {
+    font-size: 12px;
+    margin-bottom: 20px;
+  }
+
+  .auth-box input {
+    padding: 12px;
+    font-size: 15px;
+  }
+
+  .auth-box button {
+    padding: 12px;
+    font-size: 15px;
   }
 
   .message {

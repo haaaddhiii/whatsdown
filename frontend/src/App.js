@@ -339,7 +339,7 @@ function App() {
       <div className="app">
         <div className="auth-container">
           <div className="auth-box">
-            <h1>WakyTalky</h1>
+            <h1>🔒 WakyTalky</h1>
             <p className="tagline">End-to-end encrypted. Zero-knowledge. Private.</p>
             
             <form onSubmit={handleLogin}>
@@ -532,7 +532,7 @@ function App() {
             </>
           ) : (
             <div className="no-chat-selected">
-              <h2>WakyTalky</h2>
+              <h2>🔒 WakyTalky</h2>
               <p>Select a contact or search for a user to start chatting</p>
               <div className="features">
                 <div>✓ End-to-end encryption</div>
