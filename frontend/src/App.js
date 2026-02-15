@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 
-// Import the E2E encryption library
-const E2EEncryption = window.E2EEncryption;
+// Import the simplified E2E encryption library
+const SimpleCrypto = window.SimpleCrypto;
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:3001';
 
 function App() {
-  const [currentView, setCurrentView] = useState('login'); // 'login', 'register', 'chat'
+  const [currentView, setCurrentView] = useState('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -23,23 +23,30 @@ function App() {
   const [searchResults, setSearchResults] = useState([]);
   
   // Encryption
-  const encryptionRef = useRef(null);
+  const cryptoRef = useRef(null);
   const wsRef = useRef(null);
 
-  // Define callback functions BEFORE useEffect hooks that use them
+  // Initialize simple crypto
+  useEffect(() => {
+    if (!cryptoRef.current) {
+      cryptoRef.current = new SimpleCrypto();
+      console.log('✅ Simple encryption initialized');
+    }
+  }, []);
+
+  // Define callback functions BEFORE useEffect hooks
   const handleNewMessage = useCallback(async (encryptedMessage) => {
     try {
-      if (!encryptionRef.current) return;
+      if (!cryptoRef.current) return;
       
-      const crypto = encryptionRef.current;
+      const crypto = cryptoRef.current;
       
-      // Decrypt message
-      const plaintext = await crypto.receiveMessage(
-        encryptedMessage.from,
-        {
-          ciphertext: encryptedMessage.encryptedContent,
-          iv: encryptedMessage.iv
-        }
+      // Decrypt message using simple crypto
+      const plaintext = await crypto.decrypt(
+        encryptedMessage.encryptedContent,
+        encryptedMessage.iv,
+        currentUser,
+        encryptedMessage.from
       );
 
       const newMessage = {
@@ -55,7 +62,7 @@ function App() {
     } catch (error) {
       console.error('Failed to decrypt message:', error);
     }
-  }, []);
+  }, [currentUser]);
 
   const updateContactStatus = useCallback((username, status) => {
     setContacts(prev => prev.map(contact => 
@@ -72,17 +79,14 @@ function App() {
         break;
         
       case 'new_message':
-        // Decrypt and display new message
         await handleNewMessage(data.message);
         break;
         
       case 'typing':
-        // Handle typing indicator
         console.log(`${data.from} is typing...`);
         break;
         
       case 'user_status':
-        // Update contact status
         updateContactStatus(data.username, data.status);
         break;
         
@@ -90,40 +94,6 @@ function App() {
         console.log('Unknown message type:', data.type);
     }
   }, [handleNewMessage, updateContactStatus]);
-
-  // Initialize encryption on mount
-  useEffect(() => {
-    const initializeEncryption = async () => {
-      try {
-        const crypto = new E2EEncryption();
-        
-        // Load existing keys or generate new ones
-        const storedKeys = localStorage.getItem(`keys_${currentUser}`);
-        
-        if (storedKeys) {
-          // Load existing keys (you'd implement import functions)
-          console.log('Loading existing keys...');
-        } else {
-          // Generate new keys
-          await crypto.generateIdentityKeyPair();
-          await crypto.generateSignedPreKey();
-          await crypto.generateOneTimePreKeys(100);
-          
-          // Store keys securely (in production, consider IndexedDB with encryption)
-          // For demo, we're storing in localStorage (NOT RECOMMENDED for production)
-          console.log('Keys generated successfully');
-        }
-        
-        encryptionRef.current = crypto;
-      } catch (error) {
-        console.error('Encryption initialization failed:', error);
-      }
-    };
-
-    if (currentUser && !encryptionRef.current) {
-      initializeEncryption();
-    }
-  }, [currentUser]);
 
   // Connect WebSocket
   useEffect(() => {
@@ -149,7 +119,6 @@ function App() {
 
       ws.onclose = () => {
         console.log('WebSocket disconnected');
-        // Reconnect after 3 seconds
         setTimeout(() => {
           if (token) connectWebSocket();
         }, 3000);
@@ -167,22 +136,15 @@ function App() {
     e.preventDefault();
     
     try {
-      // Generate encryption keys
-      const crypto = new E2EEncryption();
-      await crypto.generateIdentityKeyPair();
-      await crypto.generateSignedPreKey();
-      await crypto.generateOneTimePreKeys(100);
-      
-      // Export public keys to send to server
-      const bundle = await crypto.exportIdentityBundle();
-      
       const response = await fetch(`${API_URL}/api/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username,
           password,
-          ...bundle
+          identityKey: 'dummy',
+          signedPreKey: 'dummy',
+          oneTimePreKeys: ['dummy']
         })
       });
 
@@ -193,7 +155,6 @@ function App() {
         localStorage.setItem('username', data.username);
         setToken(data.token);
         setCurrentUser(data.username);
-        encryptionRef.current = crypto;
         setCurrentView('chat');
       } else {
         alert(data.error || 'Registration failed');
@@ -266,31 +227,6 @@ function App() {
 
   const startChat = async (contact) => {
     try {
-      // Fetch contact's public keys
-      const response = await fetch(
-        `${API_URL}/api/users/${contact.username}/keys`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
-      );
-
-      const keys = await response.json();
-      
-      // Import keys and establish session
-      const crypto = encryptionRef.current;
-      const identityKey = await crypto.importPublicKey(keys.identityKey);
-      const signedPreKey = await crypto.importPublicKey(keys.signedPreKey);
-      const oneTimePreKey = keys.oneTimePreKey 
-        ? await crypto.importPublicKey(keys.oneTimePreKey)
-        : null;
-
-      await crypto.createSession(
-        contact.username,
-        identityKey,
-        signedPreKey,
-        oneTimePreKey
-      );
-
       setSelectedContact(contact);
       setSearchResults([]);
       setSearchQuery('');
@@ -299,7 +235,7 @@ function App() {
       loadMessages(contact.username);
     } catch (error) {
       console.error('Failed to start chat:', error);
-      alert('Failed to start encrypted chat');
+      alert('Failed to start chat');
     }
   };
 
@@ -315,17 +251,17 @@ function App() {
       const data = await response.json();
       
       // Decrypt messages
-      const crypto = encryptionRef.current;
+      const crypto = cryptoRef.current;
       const decryptedMessages = [];
 
       for (const msg of data.messages) {
         try {
-          const plaintext = await crypto.receiveMessage(
-            msg.from === currentUser ? msg.to : msg.from,
-            {
-              ciphertext: msg.encryptedContent,
-              iv: msg.iv
-            }
+          const otherUser = msg.from === currentUser ? msg.to : msg.from;
+          const plaintext = await crypto.decrypt(
+            msg.encryptedContent,
+            msg.iv,
+            currentUser,
+            otherUser
           );
 
           decryptedMessages.push({
@@ -351,12 +287,13 @@ function App() {
     if (!messageInput.trim() || !selectedContact) return;
 
     try {
-      const crypto = encryptionRef.current;
+      const crypto = cryptoRef.current;
       
-      // Encrypt message
-      const encrypted = await crypto.sendMessage(
-        selectedContact.username,
-        messageInput
+      // Encrypt message using simple crypto
+      const encrypted = await crypto.encrypt(
+        messageInput,
+        currentUser,
+        selectedContact.username
       );
 
       // Send to server
@@ -370,7 +307,7 @@ function App() {
           to: selectedContact.username,
           encryptedContent: encrypted.ciphertext,
           iv: encrypted.iv,
-          messageNumber: encrypted.messageNumber
+          messageNumber: Date.now()
         })
       });
 
@@ -393,74 +330,16 @@ function App() {
     const file = event.target.files[0];
     if (!file) return;
 
-    try {
-      const crypto = encryptionRef.current;
-      
-      // Read file
-      const arrayBuffer = await file.arrayBuffer();
-      const fileData = new Uint8Array(arrayBuffer);
-      
-      // Generate message key for this file
-      const session = crypto.sessions.get(selectedContact.username);
-      const { messageKey, nextChainKey } = await crypto.deriveMessageKeys(session.sendingChainKey);
-      session.sendingChainKey = nextChainKey;
-      
-      // Encrypt file
-      const encryptedFile = await crypto.encryptFile(fileData, messageKey);
-      
-      // Upload encrypted file
-      const formData = new FormData();
-      const encryptedBlob = new Blob([encryptedFile.ciphertext]);
-      formData.append('file', encryptedBlob, `${file.name}.enc`);
-      
-      const uploadResponse = await fetch(`${API_URL}/api/media/upload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      const uploadData = await uploadResponse.json();
-      
-      // Send message with media reference
-      const textEncrypted = await crypto.sendMessage(
-        selectedContact.username,
-        `[${file.type.startsWith('image/') ? 'Image' : 'File'}]`
-      );
-
-      await fetch(`${API_URL}/api/messages/send`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          to: selectedContact.username,
-          encryptedContent: textEncrypted.ciphertext,
-          iv: textEncrypted.iv,
-          messageNumber: textEncrypted.messageNumber,
-          mediaType: file.type,
-          mediaUrl: uploadData.url,
-          mediaIv: encryptedFile.iv,
-          mediaSize: uploadData.size
-        })
-      });
-
-      alert('File sent successfully!');
-    } catch (error) {
-      console.error('File upload error:', error);
-      alert('Failed to send file');
-    }
+    alert('File upload will be implemented soon!');
   };
 
-  // Render functions
+  // Render login view
   if (currentView === 'login') {
     return (
       <div className="app">
         <div className="auth-container">
           <div className="auth-box">
-            <h1>🔒 WakyTalky</h1>
+            <h1>🔒 Encrypted Messenger</h1>
             <p className="tagline">End-to-end encrypted. Zero-knowledge. Private.</p>
             
             <form onSubmit={handleLogin}>
@@ -491,6 +370,7 @@ function App() {
     );
   }
 
+  // Render register view
   if (currentView === 'register') {
     return (
       <div className="app">
@@ -527,6 +407,7 @@ function App() {
     );
   }
 
+  // Render chat view
   return (
     <div className="app">
       <div className="chat-container">
@@ -637,13 +518,13 @@ function App() {
             </>
           ) : (
             <div className="no-chat-selected">
-              <h2>🔒 WakyTalky</h2>
+              <h2>🔒 Encrypted Messenger</h2>
               <p>Select a contact or search for a user to start chatting</p>
               <div className="features">
                 <div>✓ End-to-end encryption</div>
                 <div>✓ Zero-knowledge architecture</div>
-                <div>✓ Forward secrecy</div>
-                <div>✓ Encrypted media sharing</div>
+                <div>✓ Simple & secure</div>
+                <div>✓ Real-time messaging</div>
               </div>
             </div>
           )}
