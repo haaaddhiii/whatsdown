@@ -26,6 +26,71 @@ function App() {
   const encryptionRef = useRef(null);
   const wsRef = useRef(null);
 
+  // Define callback functions BEFORE useEffect hooks that use them
+  const handleNewMessage = useCallback(async (encryptedMessage) => {
+    try {
+      if (!encryptionRef.current) return;
+      
+      const crypto = encryptionRef.current;
+      
+      // Decrypt message
+      const plaintext = await crypto.receiveMessage(
+        encryptedMessage.from,
+        {
+          ciphertext: encryptedMessage.encryptedContent,
+          iv: encryptedMessage.iv
+        }
+      );
+
+      const newMessage = {
+        id: encryptedMessage.id,
+        from: encryptedMessage.from,
+        text: plaintext,
+        timestamp: new Date(encryptedMessage.timestamp),
+        mediaType: encryptedMessage.mediaType,
+        mediaUrl: encryptedMessage.mediaUrl
+      };
+
+      setMessages(prev => [...prev, newMessage]);
+    } catch (error) {
+      console.error('Failed to decrypt message:', error);
+    }
+  }, []);
+
+  const updateContactStatus = useCallback((username, status) => {
+    setContacts(prev => prev.map(contact => 
+      contact.username === username 
+        ? { ...contact, status }
+        : contact
+    ));
+  }, []);
+
+  const handleWebSocketMessage = useCallback(async (data) => {
+    switch (data.type) {
+      case 'authenticated':
+        console.log('Authenticated via WebSocket');
+        break;
+        
+      case 'new_message':
+        // Decrypt and display new message
+        await handleNewMessage(data.message);
+        break;
+        
+      case 'typing':
+        // Handle typing indicator
+        console.log(`${data.from} is typing...`);
+        break;
+        
+      case 'user_status':
+        // Update contact status
+        updateContactStatus(data.username, data.status);
+        break;
+        
+      default:
+        console.log('Unknown message type:', data.type);
+    }
+  }, [handleNewMessage, updateContactStatus]);
+
   // Initialize encryption on mount
   useEffect(() => {
     const initializeEncryption = async () => {
@@ -97,70 +162,6 @@ function App() {
       connectWebSocket();
     }
   }, [token, handleWebSocketMessage]);
-
-  const handleNewMessage = useCallback(async (encryptedMessage) => {
-    try {
-      if (!encryptionRef.current) return;
-      
-      const crypto = encryptionRef.current;
-      
-      // Decrypt message
-      const plaintext = await crypto.receiveMessage(
-        encryptedMessage.from,
-        {
-          ciphertext: encryptedMessage.encryptedContent,
-          iv: encryptedMessage.iv
-        }
-      );
-
-      const newMessage = {
-        id: encryptedMessage.id,
-        from: encryptedMessage.from,
-        text: plaintext,
-        timestamp: new Date(encryptedMessage.timestamp),
-        mediaType: encryptedMessage.mediaType,
-        mediaUrl: encryptedMessage.mediaUrl
-      };
-
-      setMessages(prev => [...prev, newMessage]);
-    } catch (error) {
-      console.error('Failed to decrypt message:', error);
-    }
-  }, []);
-
-  const updateContactStatus = useCallback((username, status) => {
-    setContacts(prev => prev.map(contact => 
-      contact.username === username 
-        ? { ...contact, status }
-        : contact
-    ));
-  }, []);
-
-  const handleWebSocketMessage = useCallback(async (data) => {
-    switch (data.type) {
-      case 'authenticated':
-        console.log('Authenticated via WebSocket');
-        break;
-        
-      case 'new_message':
-        // Decrypt and display new message
-        await handleNewMessage(data.message);
-        break;
-        
-      case 'typing':
-        // Handle typing indicator
-        console.log(`${data.from} is typing...`);
-        break;
-        
-      case 'user_status':
-        // Update contact status
-        updateContactStatus(data.username, data.status);
-        break;
-        
-      default:
-        console.log('Unknown message type:', data.type);
-    }
-  }, [handleNewMessage, updateContactStatus]);
 
   const handleRegister = async (e) => {
     e.preventDefault();
