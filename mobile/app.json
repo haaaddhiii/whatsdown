@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Encrypted Messenger",
-    "slug": "encrypted-messenger",
+    "name": "WakyTalky",
+    "slug": "WakyTalky",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -38,8 +38,8 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiUrl": "http://192.168.1.100:3001",
-      "wsUrl": "ws://192.168.1.100:3001"
+      "apiUrl": "https://whatsdown.up.railway.app",
+      "wsUrl": "wss://whatsdown.up.railway.app"
     }
   }
 }
