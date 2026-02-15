@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 
 // Import the E2E encryption library
@@ -96,35 +96,9 @@ function App() {
     if (token && !wsRef.current) {
       connectWebSocket();
     }
-  }, [token]);
+  }, [token, handleWebSocketMessage]);
 
-  const handleWebSocketMessage = async (data) => {
-    switch (data.type) {
-      case 'authenticated':
-        console.log('Authenticated via WebSocket');
-        break;
-        
-      case 'new_message':
-        // Decrypt and display new message
-        await handleNewMessage(data.message);
-        break;
-        
-      case 'typing':
-        // Handle typing indicator
-        console.log(`${data.from} is typing...`);
-        break;
-        
-      case 'user_status':
-        // Update contact status
-        updateContactStatus(data.username, data.status);
-        break;
-        
-      default:
-        console.log('Unknown message type:', data.type);
-    }
-  };
-
-  const handleNewMessage = async (encryptedMessage) => {
+  const handleNewMessage = useCallback(async (encryptedMessage) => {
     try {
       if (!encryptionRef.current) return;
       
@@ -152,15 +126,41 @@ function App() {
     } catch (error) {
       console.error('Failed to decrypt message:', error);
     }
-  };
+  }, []);
 
-  const updateContactStatus = (username, status) => {
+  const updateContactStatus = useCallback((username, status) => {
     setContacts(prev => prev.map(contact => 
       contact.username === username 
         ? { ...contact, status }
         : contact
     ));
-  };
+  }, []);
+
+  const handleWebSocketMessage = useCallback(async (data) => {
+    switch (data.type) {
+      case 'authenticated':
+        console.log('Authenticated via WebSocket');
+        break;
+        
+      case 'new_message':
+        // Decrypt and display new message
+        await handleNewMessage(data.message);
+        break;
+        
+      case 'typing':
+        // Handle typing indicator
+        console.log(`${data.from} is typing...`);
+        break;
+        
+      case 'user_status':
+        // Update contact status
+        updateContactStatus(data.username, data.status);
+        break;
+        
+      default:
+        console.log('Unknown message type:', data.type);
+    }
+  }, [handleNewMessage, updateContactStatus]);
 
   const handleRegister = async (e) => {
     e.preventDefault();
