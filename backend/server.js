@@ -366,47 +366,6 @@ app.get('/api/messages/:contactUsername', authenticateToken, async (req, res) =>
 });
 
 /**
- * Get undelivered messages (for offline users coming back online)
- */
-app.get('/api/messages/pending/undelivered', authenticateToken, async (req, res) => {
-  try {
-    const to = req.user.username;
-
-    const undeliveredMessages = await Message.find({
-      to,
-      delivered: false
-    }).sort({ timestamp: 1 });
-
-    // Send messages to client
-    res.json({
-      messages: undeliveredMessages.map(m => ({
-        id: m._id,
-        from: m.from,
-        to: m.to,
-        encryptedContent: m.encryptedContent,
-        iv: m.iv,
-        messageNumber: m.messageNumber,
-        ephemeralKey: m.ephemeralKey,
-        timestamp: m.timestamp,
-        mediaType: m.mediaType,
-        mediaUrl: m.mediaUrl,
-        mediaIv: m.mediaIv,
-        mediaSize: m.mediaSize
-      }))
-    });
-
-    // Mark all as delivered
-    await Message.updateMany(
-      { to, delivered: false },
-      { delivered: true }
-    );
-  } catch (error) {
-    console.error('Error fetching pending messages:', error);
-    res.status(500).json({ error: 'Failed to fetch pending messages' });
-  }
-});
-
-/**
  * Upload encrypted media
  */
 app.post('/api/media/upload', authenticateToken, upload.single('file'), async (req, res) => {

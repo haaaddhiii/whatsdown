@@ -65,61 +65,10 @@ function App() {
     ));
   }, []);
 
-  const fetchPendingMessages = useCallback(async () => {
-    try {
-      if (!token || !encryptionRef.current) return;
-
-      const response = await fetch(
-        `${API_URL}/api/messages/pending/undelivered`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
-      );
-
-      const data = await response.json();
-      
-      if (data.messages && data.messages.length > 0) {
-        const crypto = encryptionRef.current;
-        
-        // Process each pending message
-        for (const msg of data.messages) {
-          try {
-            const plaintext = await crypto.receiveMessage(
-              msg.from,
-              {
-                ciphertext: msg.encryptedContent,
-                iv: msg.iv
-              }
-            );
-
-            const newMessage = {
-              id: msg.id,
-              from: msg.from,
-              text: plaintext,
-              timestamp: new Date(msg.timestamp),
-              mediaType: msg.mediaType,
-              mediaUrl: msg.mediaUrl
-            };
-
-            setMessages(prev => [...prev, newMessage]);
-          } catch (error) {
-            console.error('Failed to decrypt pending message:', error);
-          }
-        }
-        
-        console.log(`Fetched and decrypted ${data.messages.length} pending messages`);
-      }
-    } catch (error) {
-      console.error('Failed to fetch pending messages:', error);
-    }
-  }, [token]);
-
   const handleWebSocketMessage = useCallback(async (data) => {
     switch (data.type) {
       case 'authenticated':
         console.log('Authenticated via WebSocket');
-        // Fetch any pending messages that arrived while offline
-        await fetchPendingMessages();
         break;
         
       case 'new_message':
@@ -140,7 +89,7 @@ function App() {
       default:
         console.log('Unknown message type:', data.type);
     }
-  }, [handleNewMessage, updateContactStatus, fetchPendingMessages]);
+  }, [handleNewMessage, updateContactStatus]);
 
   // Initialize encryption on mount
   useEffect(() => {
