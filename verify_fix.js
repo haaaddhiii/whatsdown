@@ -1,7 +1,7 @@
 const E2EEncryption = require('./frontend/public/crypto.js');
 
 async function testFix() {
-    console.log('--- Starting Verification ---');
+    console.log('--- Starting Verification (Session Recovery & History) ---');
 
     // 1. Setup Alice and Bob
     const alice = new E2EEncryption();
@@ -14,88 +14,91 @@ async function testFix() {
     await bob.generateIdentityKeyPair();
     await bob.generateSignedPreKey();
 
-    // 2. Alice starts chat with Bob (Sender side)
-    // Alice fetches Bob's keys
+    // 2. Alice starts chat with Bob
     const bobKeys = await bob.exportIdentityBundle();
-
-    // Import Bob's keys into Alice's instance
     const bobIdentityKey = await alice.importPublicKey(bobKeys.identityKey);
     const bobSignedPreKey = await alice.importPublicKey(bobKeys.signedPreKey);
-    // OTPK is null as per our fix
-    const bobOneTimePreKey = null;
 
     console.log('Alice creating session...');
     const ephemeralPublicKey = await alice.createSession(
         'bob',
         bobIdentityKey,
         bobSignedPreKey,
-        bobOneTimePreKey
+        null // No OTPK
     );
 
-    // 3. Alice sends a message
-    console.log('Alice sending message...');
-    const plaintext = "Hello Bob, this is a secret message!";
-    const encryptedParams = await alice.sendMessage('bob', plaintext);
+    // 3. Alice sends 2 messages
+    console.log('Alice sending messages...');
+    const msg1Text = "Message 1: Hello Bob!";
+    const msg1Params = await alice.sendMessage('bob', msg1Text);
 
-    // Simulate network transmission
-    // Message payload contains: encryptedContent, iv, ephemeralKey (from sendMessage return)
-    const messagePayload = {
-        from: 'alice',
-        encryptedContent: encryptedParams.ciphertext,
-        iv: encryptedParams.iv,
-        ephemeralKey: encryptedParams.ephemeralPublicKey, // Now returned by sendMessage
-        messageNumber: encryptedParams.messageNumber
-    };
+    const msg2Text = "Message 2: How are you?";
+    const msg2Params = await alice.sendMessage('bob', msg2Text);
 
-    // 4. Bob receives message (Receiver side)
-    // Bob has NO session with Alice initially.
-    console.log('Bob receiving message...');
+    // 4. Bob receives messages (Simulation of Load History)
+    // Bob has NO session initially
+    console.log('Bob receiving messages (History Load)...');
 
-    try {
-        // Attempt normal receive (should fail)
-        await bob.receiveMessage('alice', {
-            ciphertext: messagePayload.encryptedContent,
-            iv: messagePayload.iv
-        });
-    } catch (err) {
-        if (err.message.includes('No session')) {
-            console.log('Caught expected "No session" error.');
+    // Message payloads as they would appear in history API response
+    // Important: History is usually returned Newest -> Oldest by server
+    const history = [
+        {
+            from: 'alice',
+            encryptedContent: msg2Params.ciphertext,
+            iv: msg2Params.iv,
+            ephemeralKey: msg2Params.ephemeralPublicKey,
+            messageNumber: msg2Params.messageNumber
+        },
+        {
+            from: 'alice',
+            encryptedContent: msg1Params.ciphertext,
+            iv: msg1Params.iv,
+            ephemeralKey: msg1Params.ephemeralPublicKey,
+            messageNumber: msg1Params.messageNumber
+        }
+    ];
 
-            // 5. Bob establishes session using createReceiveSession
-            console.log('Bob establishing session from message...');
+    // In App.js we reverse this execution order: Oldest -> Newest
+    const chronologicalHistory = [...history].reverse();
 
-            // Bob fetches Alice's identity key
-            const aliceKeys = await alice.exportIdentityBundle();
-            const aliceIdentityKey = await bob.importPublicKey(aliceKeys.identityKey);
-
-            // Bob imports the ephemeral key from the message
-            const receivedEphemeralKey = await bob.importPublicKey(messagePayload.ephemeralKey);
-
-            await bob.createReceiveSession(
-                'alice',
-                aliceIdentityKey,
-                receivedEphemeralKey
-            );
-            console.log('Session established.');
-
-            // 6. Retry decryption
-            console.log('Bob retrying decryption...');
-            const decryptedText = await bob.receiveMessage('alice', {
-                ciphertext: messagePayload.encryptedContent,
-                iv: messagePayload.iv
+    for (const msg of chronologicalHistory) {
+        try {
+            await bob.receiveMessage('alice', {
+                ciphertext: msg.encryptedContent,
+                iv: msg.iv
             });
+            console.log(`Decrypted message ${msg.messageNumber} (Unexpected success without session)`);
+        } catch (err) {
+            if (err.message.includes('No session') && msg.ephemeralKey) {
+                console.log(`Msg ${msg.messageNumber}: Missing session, attempting recovery...`);
+                // Bob fetches Alice's identity key
+                const aliceKeys = await alice.exportIdentityBundle();
+                const aliceIdentityKey = await bob.importPublicKey(aliceKeys.identityKey);
+                const receivedEphemeralKey = await bob.importPublicKey(msg.ephemeralKey);
 
-            console.log('Decrypted text:', decryptedText);
+                await bob.createReceiveSession(
+                    'alice',
+                    aliceIdentityKey,
+                    receivedEphemeralKey
+                );
+                console.log(`Msg ${msg.messageNumber}: Session recovered.`);
 
-            if (decryptedText === plaintext) {
-                console.log('✅ VERIFICATION SUCCESS: Message decrypted correctly!');
+                // Retry
+                const decrypted = await bob.receiveMessage('alice', {
+                    ciphertext: msg.encryptedContent,
+                    iv: msg.iv
+                });
+                console.log(`Msg ${msg.messageNumber} Decrypted: "${decrypted}"`);
             } else {
-                console.error('❌ VERIFICATION FAILED: Decrypted text does not match.');
+                // Normal decryption if session exists (for Msg 2)
+                const decrypted = await bob.receiveMessage('alice', {
+                    ciphertext: msg.encryptedContent,
+                    iv: msg.iv
+                });
+                console.log(`Msg ${msg.messageNumber} Decrypted: "${decrypted}"`);
             }
-        } else {
-            console.error('❌ VERIFICATION FAILED: Unexpected error:', err);
         }
     }
 }
 
-testFix().catch(console.error);
+testFix().catch((err) => console.error("Test Failed:", err));

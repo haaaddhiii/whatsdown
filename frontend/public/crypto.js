@@ -118,7 +118,15 @@ class E2EEncryption {
     );
 
     // DH2 = DH(EK_A, IK_B)
-    const ephemeralKeyPair = await this.generateSignedPreKey();
+    // Generate fresh ephemeral key pair for this session
+    const ephemeralKeyPair = await crypto.subtle.generateKey(
+      {
+        name: 'ECDH',
+        namedCurve: 'P-256'
+      },
+      true,
+      ['deriveKey', 'deriveBits']
+    );
     const dh2 = await crypto.subtle.deriveBits(
       {
         name: 'ECDH',

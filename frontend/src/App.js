@@ -27,44 +27,38 @@ function App() {
   const wsRef = useRef(null);
 
   // Define callback functions BEFORE useEffect hooks that use them
-  const handleNewMessage = useCallback(async (encryptedMessage) => {
+  // Process a single message (decrypt + handle session)
+  const processMessage = useCallback(async (msg) => {
+    if (!encryptionRef.current) return null;
+    const crypto = encryptionRef.current;
+
     try {
-      if (!encryptionRef.current) return;
-
-      const crypto = encryptionRef.current;
-
-      // Decrypt message
+      // Attempt decryption
       const plaintext = await crypto.receiveMessage(
-        encryptedMessage.from,
+        msg.from === currentUser ? msg.to : msg.from,
         {
-          ciphertext: encryptedMessage.encryptedContent,
-          iv: encryptedMessage.iv
+          ciphertext: msg.encryptedContent,
+          iv: msg.iv
         }
       );
 
-      const newMessage = {
-        id: encryptedMessage.id,
-        from: encryptedMessage.from,
+      return {
+        id: msg.id,
+        from: msg.from,
         text: plaintext,
-        timestamp: new Date(encryptedMessage.timestamp),
-        mediaType: encryptedMessage.mediaType,
-        mediaUrl: encryptedMessage.mediaUrl
+        timestamp: new Date(msg.timestamp),
+        mediaType: msg.mediaType,
+        mediaUrl: msg.mediaUrl
       };
-
-      setMessages(prev => [...prev, newMessage]);
-      setMessages(prev => [...prev, newMessage]);
     } catch (error) {
-      console.error('Failed to decrypt message:', error);
-
-      // Try to establish session if missing
-      if (error.message.includes('No session') && encryptedMessage.ephemeralKey) {
+      // Handle missing session
+      if (error.message.includes('No session') && msg.ephemeralKey) {
         try {
-          console.log('Attempting to establish session from received message...');
-          const crypto = encryptionRef.current;
+          console.log(`Attempting to establish session for message ${msg.id}...`);
 
-          // Fetch sender's identity key
+          // Get sender keys
           const response = await fetch(
-            `${API_URL}/api/users/${encryptedMessage.from}/keys`,
+            `${API_URL}/api/users/${msg.from}/keys`,
             {
               headers: { 'Authorization': `Bearer ${token}` }
             }
@@ -74,39 +68,48 @@ function App() {
 
           const keys = await response.json();
           const senderIdentityKey = await crypto.importPublicKey(keys.identityKey);
-          const sendingEphemeralKey = await crypto.importPublicKey(encryptedMessage.ephemeralKey);
+          const sendingEphemeralKey = await crypto.importPublicKey(msg.ephemeralKey);
 
           await crypto.createReceiveSession(
-            encryptedMessage.from,
+            msg.from,
             senderIdentityKey,
             sendingEphemeralKey
           );
 
           // Retry decryption
           const plaintext = await crypto.receiveMessage(
-            encryptedMessage.from,
+            msg.from === currentUser ? msg.to : msg.from,
             {
-              ciphertext: encryptedMessage.encryptedContent,
-              iv: encryptedMessage.iv
+              ciphertext: msg.encryptedContent,
+              iv: msg.iv
             }
           );
 
-          const newMessage = {
-            id: encryptedMessage.id,
-            from: encryptedMessage.from,
+          return {
+            id: msg.id,
+            from: msg.from,
             text: plaintext,
-            timestamp: new Date(encryptedMessage.timestamp),
-            mediaType: encryptedMessage.mediaType,
-            mediaUrl: encryptedMessage.mediaUrl
+            timestamp: new Date(msg.timestamp),
+            mediaType: msg.mediaType,
+            mediaUrl: msg.mediaUrl
           };
-
-          setMessages(prev => [...prev, newMessage]);
         } catch (retryError) {
           console.error('Retry decryption failed:', retryError);
+          return null;
         }
+      } else {
+        console.error('Decryption failed:', error);
+        return null;
       }
     }
-  }, [token]);
+  }, [token, currentUser]);
+
+  const handleNewMessage = useCallback(async (encryptedMessage) => {
+    const decrypted = await processMessage(encryptedMessage);
+    if (decrypted) {
+      setMessages(prev => [...prev, decrypted]);
+    }
+  }, [processMessage]);
 
   const updateContactStatus = useCallback((username, status) => {
     setContacts(prev => prev.map(contact =>
@@ -370,32 +373,22 @@ function App() {
 
       // Decrypt messages
       const crypto = encryptionRef.current;
+      // const decryptedMessages = []; // Removed duplicate declaration
+
+      // Reverse order: Process Oldest -> Newest to maintain Crypto Ratchet
+      const chronologicalMessages = [...data.messages].reverse();
       const decryptedMessages = [];
 
-      for (const msg of data.messages) {
-        try {
-          const plaintext = await crypto.receiveMessage(
-            msg.from === currentUser ? msg.to : msg.from,
-            {
-              ciphertext: msg.encryptedContent,
-              iv: msg.iv
-            }
-          );
-
-          decryptedMessages.push({
-            id: msg.id,
-            from: msg.from,
-            text: plaintext,
-            timestamp: new Date(msg.timestamp),
-            mediaType: msg.mediaType,
-            mediaUrl: msg.mediaUrl
-          });
-        } catch (error) {
-          console.error('Failed to decrypt message:', error);
+      for (const msg of chronologicalMessages) {
+        const decrypted = await processMessage(msg);
+        if (decrypted) {
+          decryptedMessages.push(decrypted);
         }
       }
 
-      setMessages(decryptedMessages.reverse());
+      setMessages(decryptedMessages);
+
+      /* setMessages(decryptedMessages.reverse()); // Already in order */
     } catch (error) {
       console.error('Failed to load messages:', error);
     }
