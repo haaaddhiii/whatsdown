@@ -412,7 +412,7 @@ function App() {
     <div className="app">
       <div className="chat-container">
         {/* Sidebar */}
-        <div className="sidebar">
+        <div className={`sidebar ${selectedContact ? 'show-chat' : ''}`}>
           <div className="sidebar-header">
             <h2>Chats</h2>
             <button onClick={handleLogout} className="logout-btn">Logout</button>
@@ -465,10 +465,24 @@ function App() {
         </div>
 
         {/* Chat Area */}
-        <div className="chat-area">
+        <div className={`chat-area ${!selectedContact ? 'show-sidebar' : ''}`}>
           {selectedContact ? (
             <>
               <div className="chat-header">
+                <button 
+                  className="back-button" 
+                  onClick={() => setSelectedContact(null)}
+                  style={{ 
+                    background: 'none', 
+                    border: 'none', 
+                    fontSize: '24px', 
+                    cursor: 'pointer',
+                    marginRight: '10px',
+                    padding: '5px'
+                  }}
+                >
+                  ←
+                </button>
                 <div className="contact-avatar">{selectedContact.username[0].toUpperCase()}</div>
                 <div>
                   <div className="contact-name">{selectedContact.username}</div>

@@ -386,7 +386,93 @@ body {
   .message {
     max-width: 85%;
   }
+
+  /* Better mobile layout */
+  .chat-container {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    border-right: none;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .chat-area {
+    width: 100%;
+    height: 100vh;
+  }
+
+  /* Show/hide chat or sidebar on mobile */
+  .sidebar.show-chat {
+    display: none;
+  }
+
+  .chat-area.show-sidebar {
+    display: none;
+  }
+
+  /* Mobile-friendly input */
+  .message-input-container {
+    padding: 10px;
+  }
+
+  .message-input-container input {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  /* Smaller header */
+  .chat-header {
+    padding: 15px;
+  }
+
+  .sidebar-header h2 {
+    font-size: 20px;
+  }
+
+  /* Touch-friendly buttons */
+  .contact-item {
+    padding: 18px 15px;
+  }
+
+  .message-input-container button {
+    padding: 10px 20px;
+  }
+
+  /* Better message bubbles on mobile */
+  .message-content {
+    font-size: 15px;
+    padding: 10px 14px;
+  }
 }
+
+/* Extra small phones */
+@media (max-width: 375px) {
+  .auth-box {
+    padding: 30px 20px;
+  }
+
+  .message {
+    max-width: 90%;
+  }
+
+  .sidebar-header {
+    padding: 15px;
+  }
+}
+
+/* Landscape phones */
+@media (max-height: 500px) and (orientation: landscape) {
+  .messages-container {
+    max-height: 40vh;
+  }
+}
+
 
 /* Scrollbar Styling */
 ::-webkit-scrollbar {
