@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Encrypted Messenger",
+    "slug": "encrypted-messenger",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#667eea"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.encrypted.messenger",
+      "infoPlist": {
+        "NSCameraUsageDescription": "We need camera access to send photos",
+        "NSPhotoLibraryUsageDescription": "We need photo library access to send images"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#667eea"
+      },
+      "package": "com.encrypted.messenger",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "apiUrl": "http://192.168.1.100:3001",
+      "wsUrl": "ws://192.168.1.100:3001"
+    }
+  }
+}

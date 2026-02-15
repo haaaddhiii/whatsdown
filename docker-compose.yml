@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: encrypted-messenger-db
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: changeme123
+      MONGO_INITDB_DATABASE: encrypted-messenger
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - messenger-network
+
+  backend:
+    build: ./backend
+    container_name: encrypted-messenger-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      MONGODB_URI: mongodb://admin:changeme123@mongodb:27017/encrypted-messenger?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-secret-in-production}
+      ALLOWED_ORIGINS: http://localhost:3000,https://yourdomain.com
+    ports:
+      - "3001:3001"
+    depends_on:
+      - mongodb
+    volumes:
+      - ./backend/uploads:/app/uploads
+    networks:
+      - messenger-network
+
+  frontend:
+    build: ./frontend
+    container_name: encrypted-messenger-frontend
+    restart: unless-stopped
+    environment:
+      REACT_APP_API_URL: http://localhost:3001
+      REACT_APP_WS_URL: ws://localhost:3001
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - messenger-network
+
+volumes:
+  mongodb_data:
+    driver: local
+
+networks:
+  messenger-network:
+    driver: bridge
