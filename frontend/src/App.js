@@ -193,7 +193,6 @@ function App() {
         setToken(data.token);
         setCurrentUser(data.username);
         encryptionRef.current = crypto;
-        setIsEncryptionReady(true);
         setCurrentView('chat');
       } else {
         alert(data.error || 'Registration failed');
