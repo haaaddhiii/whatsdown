@@ -59,16 +59,22 @@ function App() {
   const wsRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll to bottom when messages change (only if already near bottom)
   useEffect(() => {
-    // Scroll immediately
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
+    if (!messagesEndRef.current || !messagesContainerRef.current) return;
+
+    const container = messagesContainerRef.current;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+
+    // Only auto-scroll if user is near the bottom (within 150px)
+    if (isNearBottom) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [messages]);
 
-  // Also scroll when opening a chat
+  // Always scroll when opening a chat
   useEffect(() => {
     if (selectedContact && messagesEndRef.current) {
       setTimeout(() => {
@@ -688,7 +694,7 @@ function App() {
                 </div>
               </div>
 
-              <div className="messages-container">
+              <div className="messages-container" ref={messagesContainerRef}>
                 {messages.map((msg, index) => (
                   <div
                     key={index}
