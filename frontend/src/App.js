@@ -62,10 +62,20 @@ function App() {
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
+    // Scroll immediately
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
     }
   }, [messages]);
+
+  // Also scroll when opening a chat
+  useEffect(() => {
+    if (selectedContact && messagesEndRef.current) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+      }, 100);
+    }
+  }, [selectedContact]);
 
   // Initialize simple crypto
   useEffect(() => {
