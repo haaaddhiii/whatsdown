@@ -183,6 +183,35 @@ body {
   border-color: #667eea;
 }
 
+.section-header {
+  padding: 12px 20px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.section-header h3 {
+  font-size: 14px;
+  color: #666;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.empty-state {
+  padding: 40px 20px;
+  text-align: center;
+  color: #999;
+}
+
+.empty-state p {
+  margin: 8px 0;
+}
+
+.empty-state .hint {
+  font-size: 13px;
+  color: #bbb;
+}
+
 .search-results {
   background: white;
   border-bottom: 1px solid #e0e0e0;

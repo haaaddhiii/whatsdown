@@ -77,6 +77,27 @@ function App() {
     }
   }, [selectedContact]);
 
+  // Save contacts to localStorage when they change
+  useEffect(() => {
+    if (currentUser && contacts.length > 0) {
+      localStorage.setItem(`contacts_${currentUser}`, JSON.stringify(contacts));
+    }
+  }, [contacts, currentUser]);
+
+  // Load contacts from localStorage on mount
+  useEffect(() => {
+    if (currentUser) {
+      const saved = localStorage.getItem(`contacts_${currentUser}`);
+      if (saved) {
+        try {
+          setContacts(JSON.parse(saved));
+        } catch (e) {
+          console.error('Failed to load contacts');
+        }
+      }
+    }
+  }, [currentUser]);
+
   // Initialize simple crypto
   useEffect(() => {
     if (!cryptoRef.current) {
@@ -325,6 +346,16 @@ function App() {
       setSelectedContact(contact);
       setSearchResults([]);
       setSearchQuery('');
+      
+      // Add to contacts list if not already there
+      setContacts(prev => {
+        const exists = prev.find(c => c.username === contact.username);
+        if (exists) {
+          // Move to top
+          return [contact, ...prev.filter(c => c.username !== contact.username)];
+        }
+        return [contact, ...prev];
+      });
       
       // Load message history
       loadMessages(contact.username);
@@ -598,17 +629,36 @@ function App() {
             </div>
           )}
           
+          {contacts.length > 0 && (
+            <div className="section-header">
+              <h3>Recent Chats</h3>
+            </div>
+          )}
+          
           <div className="contacts-list">
+            {contacts.length === 0 && !searchQuery && (
+              <div className="empty-state">
+                <p>No recent chats</p>
+                <p className="hint">Search for users to start chatting</p>
+              </div>
+            )}
             {contacts.map(contact => (
               <div
                 key={contact.username}
                 className={`contact-item ${selectedContact?.username === contact.username ? 'active' : ''}`}
-                onClick={() => setSelectedContact(contact)}
+                onClick={() => startChat(contact)}
               >
-                <div className="contact-avatar">{contact.username[0].toUpperCase()}</div>
+                <div className="contact-avatar" style={{ position: 'relative' }}>
+                  {contact.username[0].toUpperCase()}
+                  {onlineUsers.has(contact.username) && (
+                    <span className="online-badge" />
+                  )}
+                </div>
                 <div className="contact-info">
                   <div className="contact-name">{contact.username}</div>
-                  <div className="contact-status">{contact.status}</div>
+                  <div className="contact-status">
+                    {onlineUsers.has(contact.username) ? '🟢 Online' : 'Tap to chat'}
+                  </div>
                 </div>
               </div>
             ))}
