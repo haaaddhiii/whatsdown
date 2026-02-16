@@ -60,6 +60,13 @@ function App() {
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
 
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
   // Initialize simple crypto
   useEffect(() => {
     if (!cryptoRef.current) {
@@ -673,6 +680,7 @@ function App() {
                     </span>
                   </div>
                 )}
+                <div ref={messagesEndRef} />
               </div>
 
               <div className="message-input-container">
