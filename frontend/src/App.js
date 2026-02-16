@@ -99,8 +99,15 @@ function App() {
           setContacts(JSON.parse(saved));
         } catch (e) {
           console.error('Failed to load contacts');
+          setContacts([]);
         }
+      } else {
+        // New user or no saved contacts - clear the list
+        setContacts([]);
       }
+    } else {
+      // No user logged in - clear contacts
+      setContacts([]);
     }
   }, [currentUser]);
 
@@ -321,11 +328,20 @@ function App() {
   };
 
   const handleLogout = () => {
+    // Clear all user-specific data
     localStorage.removeItem('token');
     localStorage.removeItem('username');
+    if (currentUser) {
+      localStorage.removeItem(`contacts_${currentUser}`);
+    }
+    
     setToken(null);
     setCurrentUser(null);
+    setContacts([]);
+    setSelectedContact(null);
+    setMessages([]);
     setCurrentView('login');
+    
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
