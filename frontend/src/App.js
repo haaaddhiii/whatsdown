@@ -22,10 +22,15 @@ function App() {
   const [messageInput, setMessageInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [otherUserTyping, setOtherUserTyping] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState(new Set());
   
   // Encryption
   const cryptoRef = useRef(null);
   const wsRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
   // Initialize simple crypto
   useEffect(() => {
@@ -84,17 +89,43 @@ function App() {
         break;
         
       case 'typing':
-        console.log(`${data.from} is typing...`);
+        // Show typing indicator
+        if (data.from === selectedContact?.username) {
+          setOtherUserTyping(data.isTyping);
+          if (data.isTyping) {
+            // Auto-hide after 3 seconds
+            setTimeout(() => setOtherUserTyping(false), 3000);
+          }
+        }
         break;
         
       case 'user_status':
+        // Update online/offline status
         updateContactStatus(data.username, data.status);
+        setOnlineUsers(prev => {
+          const newSet = new Set(prev);
+          if (data.status === 'online') {
+            newSet.add(data.username);
+          } else {
+            newSet.delete(data.username);
+          }
+          return newSet;
+        });
+        break;
+        
+      case 'messages_read':
+        // Update read receipts
+        setMessages(prev => prev.map(msg => 
+          data.messageIds.includes(msg.id) 
+            ? { ...msg, read: true }
+            : msg
+        ));
         break;
         
       default:
         console.log('Unknown message type:', data.type);
     }
-  }, [handleNewMessage, updateContactStatus]);
+  }, [handleNewMessage, updateContactStatus, selectedContact]);
 
   // Connect WebSocket
   useEffect(() => {
@@ -286,7 +317,8 @@ function App() {
             mediaUrl: msg.mediaUrl
           });
         } catch (error) {
-          console.error('Failed to decrypt message:', error);
+          // Skip messages that can't be decrypted (old encryption)
+          console.log('Skipping old message that cannot be decrypted');
         }
       }
 
@@ -301,6 +333,9 @@ function App() {
 
     try {
       const crypto = cryptoRef.current;
+      
+      // Stop typing indicator
+      sendTypingIndicator(false);
       
       // Encrypt message using simple crypto
       const encrypted = await crypto.encrypt(
@@ -325,11 +360,15 @@ function App() {
       });
 
       if (response.ok) {
-        // Add to local messages
+        const data = await response.json();
+        // Add to local messages with delivery status
         setMessages(prev => [...prev, {
+          id: data.messageId,
           from: currentUser,
           text: messageInput,
-          timestamp: new Date()
+          timestamp: new Date(),
+          delivered: data.delivered,
+          read: false
         }]);
         setMessageInput('');
       }
@@ -337,6 +376,37 @@ function App() {
       console.error('Failed to send message:', error);
       alert('Failed to send message');
     }
+  };
+
+  const sendTypingIndicator = (isTyping) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && selectedContact) {
+      wsRef.current.send(JSON.stringify({
+        type: 'typing',
+        to: selectedContact.username,
+        isTyping: isTyping
+      }));
+    }
+  };
+
+  const handleTyping = (e) => {
+    setMessageInput(e.target.value);
+    
+    // Send typing indicator
+    if (!isTyping && e.target.value.length > 0) {
+      setIsTyping(true);
+      sendTypingIndicator(true);
+    }
+    
+    // Clear previous timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // Set timeout to stop typing indicator
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+      sendTypingIndicator(false);
+    }, 1000);
   };
 
   const handleFileUpload = async (event) => {
@@ -513,10 +583,27 @@ function App() {
                 >
                   ←
                 </button>
-                <div className="contact-avatar">{selectedContact.username[0].toUpperCase()}</div>
+                <div className="contact-avatar" style={{ position: 'relative' }}>
+                  {selectedContact.username[0].toUpperCase()}
+                  <span 
+                    className="online-status"
+                    style={{
+                      position: 'absolute',
+                      bottom: '2px',
+                      right: '2px',
+                      width: '12px',
+                      height: '12px',
+                      borderRadius: '50%',
+                      backgroundColor: onlineUsers.has(selectedContact.username) ? '#4caf50' : '#999',
+                      border: '2px solid white'
+                    }}
+                  />
+                </div>
                 <div>
                   <div className="contact-name">{selectedContact.username}</div>
-                  <div className="encryption-status">🔒 End-to-end encrypted</div>
+                  <div className="encryption-status">
+                    {onlineUsers.has(selectedContact.username) ? '🟢 Online' : '⚫ Offline'} • 🔒 Encrypted
+                  </div>
                 </div>
               </div>
 
@@ -536,9 +623,22 @@ function App() {
                     </div>
                     <div className="message-time">
                       {msg.timestamp.toLocaleTimeString()}
+                      {msg.from === currentUser && (
+                        <span className="message-status">
+                          {msg.read ? ' ✓✓' : msg.delivered ? ' ✓✓' : ' ✓'}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
+                {otherUserTyping && (
+                  <div className="typing-indicator">
+                    <span>{selectedContact.username} is typing</span>
+                    <span className="typing-dots">
+                      <span>.</span><span>.</span><span>.</span>
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="message-input-container">
@@ -554,7 +654,7 @@ function App() {
                   type="text"
                   placeholder="Type a message..."
                   value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
+                  onChange={handleTyping}
                   onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                 />
                 <button onClick={sendMessage}>Send</button>
