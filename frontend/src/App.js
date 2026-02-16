@@ -130,17 +130,29 @@ function App() {
       const newMessage = {
         id: encryptedMessage.id,
         from: encryptedMessage.from,
+        to: encryptedMessage.to,
         text: plaintext,
         timestamp: new Date(encryptedMessage.timestamp),
         mediaType: encryptedMessage.mediaType,
         mediaUrl: encryptedMessage.mediaUrl
       };
 
-      setMessages(prev => [...prev, newMessage]);
+      // Only add to messages if this chat is currently open
+      setMessages(prev => {
+        // Check if this message belongs to the current conversation
+        const isCurrentChat = 
+          (newMessage.from === selectedContact?.username) || 
+          (newMessage.to === selectedContact?.username);
+        
+        if (isCurrentChat) {
+          return [...prev, newMessage];
+        }
+        return prev;
+      });
     } catch (error) {
       console.error('Failed to decrypt message:', error);
     }
-  }, [currentUser]);
+  }, [currentUser, selectedContact]);
 
   const updateContactStatus = useCallback((username, status) => {
     setContacts(prev => prev.map(contact => 
