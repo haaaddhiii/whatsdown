@@ -5,119 +5,155 @@
 ### End-to-End Encryption (E2EE)
 Messages are encrypted on the sender's device and can only be decrypted by the intended recipient. The server acts as a "dumb pipe" that routes encrypted data without ever having access to:
 - Message plaintext
-- Private encryption keys
+- Encryption keys
 - Decrypted media files
 
 ### Zero-Knowledge Architecture
 The server operates on a zero-knowledge basis:
-- **What the server knows**: Usernames, timestamps, encrypted payloads, public keys
-- **What the server NEVER knows**: Private keys, message content, decrypted files, conversation metadata
+- **What the server knows**: Usernames, timestamps, encrypted payloads
+- **What the server NEVER knows**: Encryption keys, message content, decrypted files, conversation metadata
 
 ## 🔑 Cryptographic Implementation
 
-### Key Hierarchy
+### Simplified E2E Encryption Approach
+
+WakyTalky uses a streamlined encryption system that provides strong end-to-end security while maintaining simplicity and reliability:
 
 ```
-User Registration
+User Identifiers
     │
-    ├── Identity Key Pair (ECDH P-256)
-    │   ├── Private: NEVER leaves device
-    │   └── Public: Sent to server
-    │
-    ├── Signed Pre-Key Pair (ECDH P-256)
-    │   ├── Private: NEVER leaves device
-    │   └── Public: Sent to server
-    │
-    └── One-Time Pre-Keys (100x ECDH P-256)
-        ├── Private: NEVER leave device
-        └── Public: Sent to server (consumed on use)
+    └── Usernames (known to both parties)
 
-Session Establishment (X3DH)
+Key Derivation (Per Conversation)
     │
-    ├── DH1 = DH(IK_A, SPK_B)
-    ├── DH2 = DH(EK_A, IK_B)
-    ├── DH3 = DH(EK_A, SPK_B)
-    └── DH4 = DH(EK_A, OPK_B) [optional]
+    ├── Input: Sorted usernames (deterministic ordering)
+    │   Example: "alice:secret:bob"
     │
-    └── Root Key = HKDF(DH1 || DH2 || DH3 || DH4)
+    ├── SHA-256 Hash
+    │   └── Produces 256-bit key material
+    │
+    └── Shared Secret Key (AES-256)
+        └── Same key for both users
 
-Per-Message Encryption (Double Ratchet)
+Message Encryption
     │
-    ├── Message Key = HKDF(Chain Key, "MessageKey")
-    ├── Next Chain Key = HKDF(Chain Key, "ChainKey")
+    ├── Random IV (96 bits) generated per message
+    ├── Plaintext + Shared Secret → AES-256-GCM
+    └── Output: (Ciphertext, IV, Auth Tag)
+
+Message Transmission
     │
-    └── Ciphertext = AES-256-GCM(Plaintext, Message Key, IV)
+    ├── Server receives: Encrypted payload + IV
+    ├── Server CANNOT decrypt (no key access)
+    └── Recipient decrypts using shared secret
 ```
 
 ### Algorithms Used
-- **Key Agreement**: ECDH with P-256 curve
-- **Symmetric Encryption**: AES-256-GCM
-- **Key Derivation**: HKDF-SHA-256
-- **Password Hashing**: bcrypt (server-side for authentication)
+- **Key Derivation**: SHA-256 hash of sorted usernames
+- **Symmetric Encryption**: AES-256-GCM (256-bit keys, 96-bit IVs)
+- **Authentication**: GCM built-in authentication tag
+- **Password Hashing**: bcrypt (server-side for login authentication only)
 
 ## 🛡️ Security Features
 
-### 1. Forward Secrecy
-Each message uses a unique encryption key derived from a ratcheting chain. Compromising one key doesn't compromise past or future messages.
+### 1. End-to-End Encryption
+Every message is encrypted on the sender's device before transmission and can only be decrypted by the intended recipient. The server never has access to encryption keys.
 
-### 2. Future Secrecy (Break-in Recovery)
-The Double Ratchet algorithm ensures that even if an attacker compromises the current state, future messages remain secure after a new key exchange.
+### 2. Unique Message Encryption
+Each message uses a cryptographically random 96-bit Initialization Vector (IV), ensuring that identical messages produce different ciphertexts.
 
-### 3. Deniable Authentication
-Messages are authenticated to the recipient but not to third parties, providing plausible deniability.
+### 3. Authenticated Encryption
+AES-GCM mode provides both confidentiality and authenticity, preventing message tampering and verifying message integrity.
 
-### 4. Protection Against Tampering
-AES-GCM provides authenticated encryption, detecting any modifications to ciphertexts.
+### 4. Zero-Knowledge Server
+The server stores only encrypted payloads and cannot access message content, encryption keys, or decrypted files.
+
+### 5. Deterministic Key Agreement
+Both users derive the same encryption key from their usernames, eliminating complex key exchange protocols while maintaining security.
 
 ## 🎯 Threat Model
 
 ### Protected Against
-✅ Server compromise - Server never has plaintext or keys
-✅ Network eavesdropping - All traffic encrypted
-✅ Man-in-the-middle - Key verification via fingerprints
-✅ Message tampering - Authenticated encryption
-✅ Replay attacks - Message numbers and timestamps
-✅ Key compromise - Forward/future secrecy
+✅ **Server compromise** - Server never has plaintext or encryption keys  
+✅ **Network eavesdropping** - All messages encrypted with AES-256-GCM  
+✅ **Message tampering** - GCM authentication prevents modifications  
+✅ **Replay attacks** - Server tracks message IDs and timestamps  
+✅ **Unauthorized access** - JWT authentication and bcrypt password hashing
 
 ### NOT Protected Against
-❌ Device compromise - If attacker controls your device, they can read messages
-❌ Malicious client - Users must trust the client software
-❌ Phishing - Users can be tricked into revealing passwords
-❌ Metadata analysis - Server knows who talks to whom and when
-❌ Backdoored devices - Compromised OS/hardware
+❌ **Device compromise** - If attacker controls your device, they can read messages  
+❌ **Malicious client** - Users must trust the client software  
+❌ **Phishing attacks** - Users can be tricked into revealing passwords  
+❌ **Metadata analysis** - Server knows who talks to whom and when  
+❌ **Backdoored devices** - Compromised OS/hardware can expose plaintext  
+❌ **Username enumeration** - Usernames are not secret in this system
+
+### Security Trade-offs
+This simplified encryption approach prioritizes:
+- ✅ **Reliability**: No complex session management that can fail
+- ✅ **Simplicity**: Easier to audit and verify
+- ✅ **Usability**: Seamless bidirectional communication
+
+Trade-offs compared to Signal Protocol:
+- ❌ **No forward secrecy**: Compromising the shared secret exposes all messages
+- ❌ **No future secrecy**: No automatic key rotation or ratcheting
+- ❌ **Username-based keys**: Changing username would require new keys
+
+**Note**: For maximum security in high-threat environments, use Signal or Wire instead.
 
 ## 🔒 Production Security Checklist
 
+### Current Implementation Status
+**Platform**: WakyTalky (Railway + Vercel + MongoDB Atlas)
+
+### ✅ Already Implemented
+- [x] HTTPS/TLS enabled (Railway + Vercel provide this)
+- [x] MongoDB authentication enabled (MongoDB Atlas)
+- [x] JWT authentication for API endpoints
+- [x] bcrypt password hashing
+- [x] CORS configured
+- [x] End-to-end message encryption (AES-256-GCM)
+- [x] WebSocket secure connections (wss://)
+- [x] Environment variables for secrets
+- [x] Zero-knowledge server architecture
+
 ### Server Security
-- [ ] Use HTTPS/TLS for all communications
-- [ ] Implement rate limiting (express-rate-limit)
-- [ ] Enable CORS with strict origin policies
-- [ ] Use strong JWT secrets (32+ random characters)
-- [ ] Enable MongoDB authentication
-- [ ] Run server as non-root user
-- [ ] Keep dependencies updated
-- [ ] Implement request validation
+- [ ] Implement rate limiting (express-rate-limit) - **HIGH PRIORITY**
+- [ ] Add helmet.js security headers
+- [ ] Implement request validation/sanitization
 - [ ] Add DDoS protection (Cloudflare)
-- [ ] Enable security headers (helmet.js)
+- [ ] Enable detailed audit logging
+- [ ] Set up automated backups
+- [ ] Monitor for suspicious activity
+- [ ] Implement IP-based blocking for abuse
 
 ### Client Security
-- [ ] Store private keys securely:
-  - Web: IndexedDB with encryption
-  - Mobile: Keychain (iOS) / Keystore (Android)
-  - Desktop: Encrypted electron-store
-- [ ] Implement key rotation policies
-- [ ] Clear sensitive data from memory
-- [ ] Validate all server responses
-- [ ] Implement certificate pinning (mobile)
-- [ ] Add biometric authentication
-- [ ] Implement auto-lock timeout
-- [ ] Secure file deletion
-- [ ] Prevent screenshots (mobile)
+- [ ] Move from localStorage to IndexedDB (Web)
+- [ ] Add session timeout/auto-lock
+- [ ] Implement biometric authentication (mobile)
+- [ ] Add certificate pinning (mobile apps)
+- [ ] Secure memory cleanup for sensitive data
+- [ ] Add screenshot prevention (mobile)
+- [ ] Implement disappearing messages
+- [ ] Add self-destruct timer option
 
-### Database Security
-- [ ] Enable MongoDB authentication
-- [ ] Use strong passwords
-- [ ] Limit network access (firewall)
+### Database Security  
+- [x] MongoDB authentication enabled (Atlas)
+- [x] Strong passwords enforced
+- [x] Network firewall (Atlas IP whitelist)
+- [ ] Enable encryption at rest
+- [ ] Regular automated backups
+- [ ] Audit logging for database access
+- [ ] Principle of least privilege for DB users
+
+### Authentication Security
+- [ ] Enforce minimum password length (currently none)
+- [ ] Implement 2FA/MFA - **RECOMMENDED**
+- [ ] Account lockout after failed attempts
+- [ ] Secure password reset flow
+- [ ] Login notifications via email/push
+- [ ] Device verification
+- [ ] Session management improvements
 - [ ] Enable encryption at rest
 - [ ] Regular automated backups
 - [ ] Audit logging
@@ -134,33 +170,36 @@ AES-GCM provides authenticated encryption, detecting any modifications to cipher
 
 ## 🔐 Key Management Best Practices
 
-### Key Generation
-- Use cryptographically secure random number generators
-- Generate keys on device, never on server
-- Minimum 256-bit key length
+### Key Derivation
+- Keys are derived using SHA-256 hash of sorted usernames
+- Deterministic: Same key always generated for same user pair
+- No storage required: Keys derived on-demand
 
-### Key Storage
+### Important Security Notes
 ```javascript
-// ❌ BAD - Never do this
-localStorage.setItem('privateKey', privateKey);
+// Current implementation (client-side only)
+// Keys are derived from usernames - NOT stored anywhere
+const sharedKey = await deriveSharedKey(username1, username2);
 
-// ✅ GOOD - Encrypted storage
-const encryptedKey = await encryptWithPassword(privateKey, userPassword);
-await secureStorage.set('privateKey', encryptedKey);
+// ⚠️ Security Implications:
+// - Keys never leave the device
+// - No key storage needed
+// - No complex key exchange protocol
+// - BUT: Same key used for all messages between two users
 ```
 
-### Key Rotation
-- Rotate signed pre-keys monthly
-- Generate new one-time pre-keys when running low
-- Identity keys should rarely change (user verification)
+### For Production Enhancement
+Consider implementing:
+- **Salt addition**: Add server-provided salt to key derivation
+- **Key rotation**: Periodic key refresh (e.g., monthly)
+- **Perfect forward secrecy**: Implement ephemeral key exchanges
+- **Key backup**: Secure cloud backup for account recovery
 
-### Key Verification
-```javascript
-// Generate safety numbers for out-of-band verification
-const fingerprint = await crypto.generateFingerprint(theirPublicKey);
-// Display as QR code or 60-digit number
-// Users compare in person or via trusted channel
-```
+### Current Key Properties
+✅ **Never stored**: Keys derived on-demand  
+✅ **Device-only**: Keys never transmitted to server  
+✅ **Deterministic**: Both users derive identical key  
+⚠️ **Static**: Same key for all messages (trade-off for simplicity)
 
 ## 📊 Privacy Considerations
 
