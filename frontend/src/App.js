@@ -632,7 +632,9 @@ function App() {
           
           {searchResults.length > 0 && (
             <div className="search-results">
-              {searchResults.map(user => (
+              {searchResults
+                .filter(user => user.username !== currentUser)
+                .map(user => (
                 <div
                   key={user.username}
                   className="contact-item"
@@ -660,7 +662,9 @@ function App() {
                 <p className="hint">Search for users to start chatting</p>
               </div>
             )}
-            {contacts.map(contact => (
+            {contacts
+              .filter(contact => contact.username !== currentUser)
+              .map(contact => (
               <div
                 key={contact.username}
                 className={`contact-item ${selectedContact?.username === contact.username ? 'active' : ''}`}
