@@ -648,17 +648,12 @@ function App() {
                 className={`contact-item ${selectedContact?.username === contact.username ? 'active' : ''}`}
                 onClick={() => startChat(contact)}
               >
-                <div className="contact-avatar" style={{ position: 'relative' }}>
+                <div className="contact-avatar">
                   {contact.username[0].toUpperCase()}
-                  {onlineUsers.has(contact.username) && (
-                    <span className="online-badge" />
-                  )}
                 </div>
                 <div className="contact-info">
                   <div className="contact-name">{contact.username}</div>
-                  <div className="contact-status">
-                    {onlineUsers.has(contact.username) ? '🟢 Online' : 'Tap to chat'}
-                  </div>
+                  <div className="contact-status">Tap to chat</div>
                 </div>
               </div>
             ))}
@@ -684,27 +679,12 @@ function App() {
                 >
                   ←
                 </button>
-                <div className="contact-avatar" style={{ position: 'relative' }}>
+                <div className="contact-avatar">
                   {selectedContact.username[0].toUpperCase()}
-                  <span 
-                    className="online-status"
-                    style={{
-                      position: 'absolute',
-                      bottom: '2px',
-                      right: '2px',
-                      width: '12px',
-                      height: '12px',
-                      borderRadius: '50%',
-                      backgroundColor: onlineUsers.has(selectedContact.username) ? '#4caf50' : '#999',
-                      border: '2px solid white'
-                    }}
-                  />
                 </div>
                 <div>
                   <div className="contact-name">{selectedContact.username}</div>
-                  <div className="encryption-status">
-                    {onlineUsers.has(selectedContact.username) ? '🟢 Online' : '⚫ Offline'} • 🔒 Encrypted
-                  </div>
+                  <div className="encryption-status">🔒 End-to-end encrypted</div>
                 </div>
               </div>
 
