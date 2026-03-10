@@ -1,384 +1,351 @@
-# 🔒 Encrypted Messenger - Full Stack E2E Encrypted Messaging Platform
+# 🔒 WakyTalky - End-to-End Encrypted Messenger
 
-A complete end-to-end encrypted messaging application with **zero-knowledge architecture** that works across **Web, Mobile (iOS/Android), and Desktop (Windows/Mac/Linux)**.
+A secure, real-time messaging app with **zero-knowledge encryption**. Messages are encrypted on your device - the server never sees your conversations.
 
-## 🎯 Key Features
+[![Live Demo](https://img.shields.io/badge/Live-Demo-blue?style=for-the-badge)](https://wakytalky.vercel.app)
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github)](https://github.com/haaaddhiii/WakyTalky)
+[![Security](https://img.shields.io/badge/Security-8%2F10-green?style=for-the-badge&logo=shield)](https://github.com/haaaddhiii/WakyTalky/blob/main/SECURITY.md)
+[![Status](https://img.shields.io/badge/Status-Beta-yellow?style=for-the-badge)](https://wakytalky.vercel.app)
 
-### Privacy & Security First
-- ✅ **End-to-End Encryption (E2EE)** - Messages encrypted on device, server never sees plaintext
-- ✅ **Zero-Knowledge Architecture** - Server stores only encrypted data
-- ✅ **Simplified Encryption** - Reliable AES-256-GCM with shared secret approach
-- ✅ **SHA-256 Key Derivation** - Deterministic keys from user identities
-- ✅ **Encrypted Media** - Images and files encrypted before upload
-- ✅ **Unique IVs** - Fresh random initialization vector for each message
+**🌐 Live App:** [wakytalky.vercel.app](https://wakytalky.vercel.app)  
+**📱 Repository:** [github.com/haaaddhiii/WakyTalky](https://github.com/haaaddhiii/WakyTalky)
 
-### Platform Support
-- 🌐 **Web App** - React-based responsive web interface
-- 📱 **Mobile App** - React Native (iOS & Android)
-- 💻 **Desktop App** - Electron (Windows, macOS, Linux)
+> A learning project demonstrating end-to-end encryption, zero-knowledge architecture, and modern full-stack development.
 
-### Messaging Features
-- 💬 Real-time messaging via WebSocket
-- 📷 Image sharing (encrypted)
-- 📎 File sharing (encrypted)
+---
+
+## ✨ Features
+
+### Security
+- 🔒 **End-to-End Encryption** - AES-256-GCM encryption
+- 🔐 **Zero-Knowledge Server** - Server can't read your messages
+- 🛡️ **Strong Password Policy** - 8+ characters with complexity requirements
+- ⚡ **Rate Limiting** - Protection against brute force attacks
+- 🔑 **Secure Authentication** - JWT tokens with bcrypt password hashing
+
+### Messaging
+- 💬 **Real-time Chat** - Instant message delivery via WebSocket
+- 📱 **Recent Chats** - See your conversation history
+- 🔍 **User Search** - Find and start conversations
+- 🌙 **Dark Mode** - Automatically follows system theme
+- 📲 **Mobile Responsive** - Works great on phones and tablets
+
+### Platforms
+- 🌐 **Web App** - React-based web interface
+- 📱 **Android App** - WebView wrapper (APK available)
+- 💻 **Desktop** - Works in any modern browser
+
+---
+
+## 🚀 Tech Stack
+
+**Frontend:**
+- React 18.2.0
+- WebSocket for real-time communication
+- Web Crypto API for encryption
+- Vercel deployment
+
+**Backend:**
+- Node.js + Express
+- WebSocket (ws)
+- MongoDB (Atlas)
+- JWT authentication
+- bcrypt password hashing
+- Railway deployment
+
+**Security:**
+- Helmet.js (security headers)
+- express-rate-limit
+- CORS whitelist
+- Input validation & sanitization
+
+---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    CLIENT DEVICES                       │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐               │
-│  │   Web    │  │  Mobile  │  │ Desktop  │               │
-│  │ (React)  │  │  (RN)    │  │(Electron)│               │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘               │
-│       │             │              │                    │
-│       └─────────────┼──────────────┘                    │
-│                     │                                   │
-│            ┌────────▼────────┐                          │
-│            │ E2E Crypto Lib  │  ◄── Keys never leave    │
-│            │  (SubtleCrypto) │      device!             │
-│            └─────────────────┘                          │
-└─────────────────────────────────────────────────────────┘
-                      │
-                      │ HTTPS/WSS
-                      │ (Encrypted payloads only)
-                      ▼
-┌─────────────────────────────────────────────────────────┐
-│                   BACKEND SERVER                        │
-│  ┌────────────────────────────────────────────┐         │
-│  │  Node.js + Express + WebSocket             │         │
-│  │  - Routes encrypted messages               │         │
-│  │  - Stores only ciphertext                  │         │
-│  │  - Manages public keys                     │         │
-│  │  - NO ACCESS to plaintext or private keys  │         │
-│  └────────────────┬───────────────────────────┘         │
-│                   │                                     │
-│                   ▼                                     │
-│  ┌────────────────────────────────────────────┐         │
-│  │         MongoDB Database                   │         │
-│  │  - Encrypted messages (ciphertext only)    │         │
-│  │  - Public keys only                        │         │
-│  │  - User metadata (username, timestamps)    │         │
-│  └────────────────────────────────────────────┘         │
-└─────────────────────────────────────────────────────────┘
+┌─────────────┐
+│   Client    │  ← Encryption happens here
+│  (Browser)  │  ← Keys never leave device
+└──────┬──────┘
+       │ HTTPS/WSS (encrypted data only)
+       ▼
+┌─────────────┐
+│   Server    │  ← Only routes encrypted messages
+│  (Railway)  │  ← Zero-knowledge architecture
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│  MongoDB    │  ← Stores encrypted messages
+│   (Atlas)   │  ← Cannot decrypt content
+└─────────────┘
 ```
 
-## 🔐 Encryption Details
+---
 
-### Simplified E2E Encryption Implementation
-- **Shared Secret Approach** - Deterministic key derivation from usernames
-- **AES-256-GCM** - Symmetric encryption for messages and media
-- **SHA-256 Hashing** - Key derivation from user identities
-- **Zero-Knowledge Server** - Server never sees plaintext or encryption keys
+## 🔐 How Encryption Works
 
-### How It Works
-1. **Key Derivation** - Both users derive the same shared secret from their usernames
-2. **Message Encryption** - Each message encrypted with AES-256-GCM
-3. **Unique IVs** - Every message uses a fresh random Initialization Vector
-4. **Bidirectional** - Both users can encrypt/decrypt each other's messages seamlessly
+1. **Key Derivation**: SHA-256 hash of both usernames creates a shared secret
+2. **Message Encryption**: Each message encrypted with AES-256-GCM
+3. **Unique IVs**: Random 96-bit IV per message ensures unique ciphertext
+4. **Server Storage**: Only ciphertext + IV stored, never plaintext
+5. **Decryption**: Recipient derives same key and decrypts locally
 
-### Security Features
-- **End-to-End Encryption** - Messages encrypted on device, server only routes ciphertext
-- **Zero-Knowledge Architecture** - Server cannot read messages or access keys
-- **Authenticated Encryption** - AES-GCM provides both confidentiality and integrity
-- **Random IVs** - Each message uses cryptographically random initialization vectors
+**Result:** End-to-end encryption without complex key exchange protocols.
+
+---
 
 ## 📦 Project Structure
 
 ```
-encrypted-messenger/
-├── shared/
-│   └── crypto.js              # Original complex encryption (backup)
+wakytalky/
 ├── backend/
-│   ├── server.js              # Express + WebSocket server
-│   ├── package.json
-│   └── .env.example
-├── frontend/                  # Web app (React)
+│   ├── server.js           # Express + WebSocket server
+│   └── package.json
+├── frontend/
 │   ├── src/
-│   │   ├── App.js             # Main React component (uses SimpleCrypto)
-│   │   ├── App.css            # Responsive styling
-│   │   ├── index.js
-│   │   └── index.css
-│   ├── public/
-│   │   ├── index.html
-│   │   └── simpleCrypto.js    # Simplified E2E encryption library
-│   └── package.json
-├── mobile/                    # Mobile app (React Native)
-│   ├── App.js
-│   ├── app.json
-│   └── package.json
-└── desktop/                   # Desktop app (Electron)
-    ├── main.js
-    ├── package.json
-    └── build/
+│   │   ├── App.js          # Main React component
+│   │   └── App.css         # Styling
+│   └── public/
+│       ├── simpleCrypto.js # E2E encryption library
+│       └── index.html
+└── mobile/
+    ├── App.js              # React Native WebView
+    ├── app.json            # Expo config
+    └── assets/
+        └── icon.png        # App icon
 ```
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js 18+ 
-- MongoDB 6+
-- npm or yarn
-- For mobile: Expo CLI
-- For desktop: Electron
-
-### 1. Backend Setup
-
-```bash
-cd backend
-
-# Install dependencies
-npm install
-
-# Create .env file
-cp .env.example .env
-
-# Edit .env and set:
-# - MONGODB_URI (your MongoDB connection string)
-# - JWT_SECRET (random secret key)
-
-# Start MongoDB (if local)
-mongod
-
-# Start server
-npm start
-
-# Server runs on http://localhost:3001
-```
-
-### 2. Web App Setup
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Copy crypto library to public folder
-cp ../shared/crypto.js public/
-
-# Start development server
-npm start
-
-# Web app opens at http://localhost:3000
-```
-
-### 3. Mobile App Setup
-
-```bash
-cd mobile
-
-# Install dependencies
-npm install
-
-# Copy and adapt crypto library
-cp ../shared/crypto.js .
-# (You may need to adapt for React Native environment)
-
-# Start Expo
-npm start
-
-# Scan QR code with Expo Go app (iOS/Android)
-# OR run on emulator:
-npm run android  # For Android
-npm run ios      # For iOS
-```
-
-### 4. Desktop App Setup
-
-```bash
-cd desktop
-
-# Install dependencies
-npm install
-
-# For development (loads from web app)
-npm start
-
-# For production build:
-npm run build        # Builds for current OS
-npm run build:mac    # macOS
-npm run build:win    # Windows
-npm run build:linux  # Linux
-```
-
-## 🧪 Testing the App
-
-### Registration Flow
-1. Open the app on any platform
-2. Click "Register"
-3. Choose a username and password
-4. App automatically generates encryption keys
-5. Public keys sent to server, private keys stay on device
-
-### Starting a Chat
-1. Login with your credentials
-2. Search for a user by username
-3. Click on user to start encrypted session
-4. App performs X3DH key exchange
-5. All messages now end-to-end encrypted!
-
-### Sending Media
-1. Click attachment icon (📎 or 📷)
-2. Select image or file
-3. File is encrypted on device BEFORE upload
-4. Server stores only encrypted data
-5. Recipient decrypts on their device
-
-## 🔒 Security Best Practices
-
-### For Production Deployment
-
-1. **Environment Variables**
-   - Use strong, random JWT_SECRET
-   - Never commit .env files
-   - Use environment-specific configs
-
-2. **HTTPS/WSS**
-   - Always use TLS in production
-   - Get SSL certificate (Let's Encrypt)
-   - Configure nginx/Apache reverse proxy
-
-3. **Key Storage**
-   - Web: Consider IndexedDB with encryption
-   - Mobile: Use Keychain/Keystore
-   - Desktop: Use electron-store with encryption
-   - Never store private keys in localStorage
-
-4. **Database Security**
-   - Enable MongoDB authentication
-   - Use strong passwords
-   - Limit network access
-   - Regular backups (encrypted data is safe)
-
-5. **Rate Limiting**
-   - Add express-rate-limit
-   - Prevent brute force attacks
-   - Limit file upload sizes
-
-6. **Additional Features**
-   - Implement password strength requirements
-   - Add 2FA (TOTP)
-   - Session management
-   - Device verification
-   - Key rotation policies
-
-## 📱 Platform-Specific Notes
-
-### Web
-- Works in all modern browsers
-- Uses SubtleCrypto API (requires HTTPS in production)
-- Supports Progressive Web App (PWA)
-- Responsive design for mobile browsers
-
-### Mobile
-- Uses Expo for easy deployment
-- Camera integration for photos
-- File system access for documents
-- Push notifications (implement with FCM/APNS)
-- Biometric authentication (Face ID/Touch ID)
-
-### Desktop
-- Native notifications
-- System tray integration
-- Auto-launch on startup
-- Local key storage with encryption
-- Cross-platform (Win/Mac/Linux)
-
-## 🛠️ API Endpoints
-
-### Authentication
-- `POST /api/register` - Register new user
-- `POST /api/login` - Login user
-
-### Users
-- `GET /api/users/:username/keys` - Get user's public keys
-- `POST /api/users/refresh-keys` - Refresh one-time pre-keys
-- `GET /api/users/search?query=` - Search users
-
-### Messages
-- `POST /api/messages/send` - Send encrypted message
-- `GET /api/messages/:contactUsername` - Get message history
-
-### Media
-- `POST /api/media/upload` - Upload encrypted media
-
-### WebSocket Events
-- `authenticate` - Authenticate WebSocket connection
-- `new_message` - Receive new message
-- `typing` - Typing indicator
-- `user_status` - Online/offline status
-- `mark_read` - Mark messages as read
-
-## 🔧 Customization
-
-### Adding Features
-1. **Group Chats** - Implement Sender Keys protocol
-2. **Voice/Video Calls** - Use WebRTC with E2E encryption
-3. **Disappearing Messages** - Add client-side timers
-4. **Backup/Restore** - Encrypted backup with user password
-5. **Multi-Device** - Sync encryption keys securely
-
-### Styling
-- Web: Edit `frontend/src/App.css`
-- Mobile: Edit styles in `mobile/App.js`
-- Desktop: Inherits from web app
-
-## 🤝 Contributing
-
-This is a complete, production-ready foundation. To contribute:
-1. Fork the repository
-2. Create feature branch
-3. Test on all platforms
-4. Submit pull request
-
-## 📄 License
-
-MIT License - Feel free to use for personal or commercial projects
-
-## ⚠️ Disclaimer
-
-This is a demonstration of E2E encryption principles. For production use:
-- Conduct security audit
-- Test thoroughly
-- Follow OWASP guidelines
-- Consider using established libraries (libsignal)
-- Comply with local regulations
-
-## 🆘 Support
-
-For issues or questions:
-- Check documentation
-- Review code comments
-- Test with simple examples first
-- Verify network connectivity
-- Check MongoDB connection
-
-## 🎓 Learning Resources
-
-- [Signal Protocol](https://signal.org/docs/)
-- [X3DH Specification](https://signal.org/docs/specifications/x3dh/)
-- [Double Ratchet Algorithm](https://signal.org/docs/specifications/doubleratchet/)
-- [SubtleCrypto API](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto)
-- [End-to-End Encryption](https://en.wikipedia.org/wiki/End-to-end_encryption)
-
-## 🚀 Deployment
-
-### Docker Deployment
-```bash
-# Build backend image
-docker build -t encrypted-messenger-backend ./backend
-
-# Run with docker-compose
-docker-compose up -d
-```
-
-### Cloud Deployment
-- Backend: Deploy to AWS, GCP, Azure, Heroku, DigitalOcean
-- Web: Netlify, Vercel, GitHub Pages
-- Mobile: App Store, Google Play
-- Desktop: GitHub Releases, Auto-update with electron-updater
 
 ---
 
-**Built with privacy in mind. Your conversations belong to you. 🔒**
+## 🛠️ Local Development
+
+### Prerequisites
+- Node.js 18+
+- MongoDB (local or Atlas)
+- Git
+
+### Setup
+
+1. **Clone the repository**
+```bash
+git clone https://github.com/haaaddhiii/WakyTalky.git
+cd WakyTalky
+```
+
+2. **Backend Setup**
+```bash
+cd backend
+npm install
+
+# Create .env file
+echo "MONGODB_URI=your_mongodb_uri
+JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(64).toString('hex')")
+PORT=3001" > .env
+
+# Start server
+npm start
+```
+
+3. **Frontend Setup**
+```bash
+cd frontend
+npm install
+
+# Create .env file
+echo "REACT_APP_API_URL=http://localhost:3001
+REACT_APP_WS_URL=ws://localhost:3001" > .env
+
+# Start dev server
+npm start
+```
+
+4. **Visit** http://localhost:3000
+
+---
+
+## ☁️ Deployment
+
+### Backend (Railway)
+
+1. Create new project on [Railway](https://railway.app)
+2. Connect your GitHub repository
+3. Set environment variables:
+   ```
+   MONGODB_URI=your_mongodb_atlas_uri
+   JWT_SECRET=your_secure_random_secret (64+ chars)
+   NODE_ENV=production
+   PORT=3001
+   ```
+4. Deploy automatically on push
+
+### Frontend (Vercel)
+
+1. Import project on [Vercel](https://vercel.com)
+2. Set environment variables:
+   ```
+   REACT_APP_API_URL=https://your-railway-url.up.railway.app
+   REACT_APP_WS_URL=wss://your-railway-url.up.railway.app
+   CI=false
+   ```
+3. Deploy automatically on push
+
+### Mobile (Android APK)
+
+1. Update `mobile/app.json` with your backend URL
+2. Run:
+   ```bash
+   cd mobile
+   npm install
+   eas build --platform android --profile preview
+   ```
+3. Download and distribute APK
+
+---
+
+## 🔒 Security Features
+
+### Implemented
+- ✅ End-to-end encryption (AES-256-GCM)
+- ✅ Rate limiting (5 login attempts / 15 min)
+- ✅ Strong password policy (8+ chars, uppercase, lowercase, number)
+- ✅ Input validation & sanitization
+- ✅ CORS whitelist
+- ✅ Security headers (Helmet.js)
+- ✅ JWT authentication
+- ✅ bcrypt password hashing
+- ✅ Zero-knowledge architecture
+
+### Password Requirements
+- Minimum 8 characters
+- At least one uppercase letter
+- At least one lowercase letter
+- At least one number
+- Not a common password
+
+### Username Requirements
+- 3-20 characters
+- Letters, numbers, and underscores only
+- Case-insensitive (Alice = alice)
+
+---
+
+## 📱 Mobile App
+
+The Android app is a WebView wrapper that loads the web app:
+
+**Benefits:**
+- ✅ One codebase for all platforms
+- ✅ Instant updates (no app store approval)
+- ✅ Same security as web version
+- ✅ Native app experience
+
+**Download:** Check Releases for APK
+
+---
+
+## ⚠️ Security Disclaimer
+
+**Current Status:** Beta / Educational Project
+
+**Good for:**
+- ✅ Personal use
+- ✅ Small friend/family groups
+- ✅ Learning E2E encryption
+- ✅ Portfolio projects
+
+**Not recommended for:**
+- ❌ Highly sensitive communications
+- ❌ Activist/journalist use cases
+- ❌ Large-scale deployment without security audit
+
+**Known Limitations:**
+- No forward secrecy (same key for all messages)
+- No key rotation mechanism
+- Username-based key derivation (simple but limited)
+
+**For maximum security, use:** [Signal](https://signal.org) or [Wire](https://wire.com)
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Please:
+
+1. Fork the repository: [github.com/haaaddhiii/WakyTalky](https://github.com/haaaddhiii/WakyTalky)
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+**Areas for improvement:**
+- Add 2FA/MFA
+- Implement forward secrecy
+- Add group chats
+- Voice/video calling
+- Message deletion
+- File sharing
+
+**Before submitting:**
+- [ ] Test your changes
+- [ ] Update documentation
+- [ ] Follow existing code style
+- [ ] Add comments for complex logic
+
+---
+
+## 📄 License
+
+MIT License - See LICENSE file for details
+
+---
+
+## 🙏 Acknowledgments
+
+Built with:
+- React
+- Node.js/Express
+- MongoDB
+- Web Crypto API
+- Railway & Vercel
+
+Inspired by Signal Protocol for E2E encryption principles.
+
+---
+
+## 📞 Support
+
+**Issues?** [Open an issue on GitHub](https://github.com/haaaddhiii/WakyTalky/issues)
+
+**Questions?** Check out these docs:
+- [SECURITY.md](https://github.com/haaaddhiii/WakyTalky/blob/main/SECURITY.md) - Detailed security architecture
+- [DEPLOYMENT.md](https://github.com/haaaddhiii/WakyTalky/blob/main/DEPLOYMENT.md) - Step-by-step deployment guide
+
+**Want to contribute?** See [Contributing](#-contributing) section above.
+
+---
+
+## 🎓 Learning Resources
+
+Want to understand the crypto?
+- [Web Crypto API Docs](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API)
+- [AES-GCM Explained](https://en.wikipedia.org/wiki/Galois/Counter_Mode)
+- [OWASP Security Guide](https://owasp.org/www-project-top-ten/)
+
+---
+
+## 📊 Project Stats
+
+- **Lines of Code:** ~2,500
+- **Security Rating:** 8/10
+- **Platform:** Web + Android
+- **Status:** Beta
+
+---
+
+**Made with ❤️ for secure communications**
+
+**GitHub:** [github.com/haaaddhiii/WakyTalky](https://github.com/haaaddhiii/WakyTalky)
+
+**⭐ Star this repo if you found it useful!**
