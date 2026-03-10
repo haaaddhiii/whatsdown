@@ -1,9 +1,16 @@
 /**
- * Zero-Knowledge Encrypted Messaging Backend
+ * Zero-Knowledge Encrypted Messaging Backend - SECURITY HARDENED
  * Server NEVER has access to:
  * - Message plaintext
  * - User encryption keys
  * - Decrypted media files
+ * 
+ * Security Features:
+ * - Rate limiting on auth endpoints
+ * - Helmet.js security headers
+ * - CORS whitelist
+ * - Strong password policy
+ * - Input sanitization
  */
 
 const express = require('express');
@@ -17,15 +24,99 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+const validator = require('validator');
 require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// Middleware
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+// ============================================
+// CRITICAL FIX #1: Security Headers (Helmet)
+// ============================================
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "wss:", "https:"]
+    }
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true
+  }
+}));
+
+// ============================================
+// CRITICAL FIX #2: CORS Whitelist
+// ============================================
+const allowedOrigins = [
+  'https://wakytalky.vercel.app',
+  'http://localhost:3000',  // Development
+  'http://localhost:3001'   // Development
+];
+
+// Add production domain from environment variable
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`🚫 Blocked CORS request from: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// ============================================
+// CRITICAL FIX #3: Rate Limiting
+// ============================================
+
+// General API rate limit (100 requests per 15 minutes)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: 'Too many requests, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Strict rate limit for login (5 attempts per 15 minutes)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many login attempts, please try again in 15 minutes',
+  skipSuccessfulRequests: true, // Don't count successful logins
+});
+
+// Strict rate limit for registration (3 accounts per hour per IP)
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  message: 'Too many accounts created, please try again later',
+});
+
+// Apply general rate limiting to all API routes
+app.use('/api/', apiLimiter);
+
+// Body parsing with reasonable limits
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use('/uploads', express.static('uploads'));
 
 // MongoDB Models
@@ -83,8 +174,26 @@ const upload = multer({
 // WebSocket connections
 const clients = new Map(); // username -> WebSocket
 
-// JWT Secret (use environment variable in production)
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+// ============================================
+// JWT Secret Validation
+// ============================================
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// Enforce strong JWT secret in production
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  console.error('❌ CRITICAL: JWT_SECRET must be set in environment variables and be at least 32 characters long');
+  console.error('💡 Generate one with: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"');
+  
+  // Use fallback only in development
+  if (process.env.NODE_ENV === 'production') {
+    console.error('🚨 Cannot start in production without secure JWT_SECRET');
+    process.exit(1);
+  } else {
+    console.warn('⚠️  Using default JWT_SECRET for development only');
+  }
+}
+
+const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'dev-secret-DO-NOT-USE-IN-PRODUCTION';
 
 // Middleware to verify JWT
 const authenticateToken = (req, res, next) => {
@@ -95,7 +204,7 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, EFFECTIVE_JWT_SECRET, (err, user) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
@@ -105,34 +214,139 @@ const authenticateToken = (req, res, next) => {
 };
 
 // ============================================
+// CRITICAL FIX #4: Input Validation & Sanitization
+// ============================================
+
+/**
+ * Validate and sanitize username
+ */
+const validateUsername = (username) => {
+  if (!username || typeof username !== 'string') {
+    return { valid: false, error: 'Username is required' };
+  }
+
+  // Trim and escape
+  const cleaned = validator.trim(username);
+  
+  // Length check
+  if (cleaned.length < 3 || cleaned.length > 20) {
+    return { valid: false, error: 'Username must be 3-20 characters' };
+  }
+
+  // Format check (alphanumeric and underscore only)
+  if (!/^[a-zA-Z0-9_]+$/.test(cleaned)) {
+    return { valid: false, error: 'Username can only contain letters, numbers, and underscores' };
+  }
+
+  // Reserved names
+  const reserved = ['admin', 'root', 'system', 'wakytalky', 'support', 'help'];
+  if (reserved.includes(cleaned.toLowerCase())) {
+    return { valid: false, error: 'Username not available' };
+  }
+
+  return { valid: true, value: cleaned };
+};
+
+/**
+ * Validate password strength
+ */
+const validatePassword = (password) => {
+  if (!password || typeof password !== 'string') {
+    return { valid: false, error: 'Password is required' };
+  }
+
+  // Minimum length
+  if (password.length < 8) {
+    return { valid: false, error: 'Password must be at least 8 characters' };
+  }
+
+  // Maximum length (prevent DoS)
+  if (password.length > 128) {
+    return { valid: false, error: 'Password too long (max 128 characters)' };
+  }
+
+  // Require uppercase
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, error: 'Password must contain at least one uppercase letter' };
+  }
+
+  // Require lowercase
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, error: 'Password must contain at least one lowercase letter' };
+  }
+
+  // Require number
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, error: 'Password must contain at least one number' };
+  }
+
+  // Check against common passwords
+  const commonPasswords = [
+    'password', '12345678', 'qwerty123', 'password123', 
+    'admin123', 'letmein1', 'welcome1', 'monkey123'
+  ];
+  if (commonPasswords.includes(password.toLowerCase())) {
+    return { valid: false, error: 'Password is too common, please choose a stronger one' };
+  }
+
+  return { valid: true };
+};
+
+/**
+ * Sanitize message content to prevent XSS
+ */
+const sanitizeMessage = (text) => {
+  if (!text || typeof text !== 'string') {
+    return '';
+  }
+  // Escape HTML but allow the encrypted content to pass through
+  return validator.escape(text.substring(0, 10000)); // Limit length
+};
+
+// ============================================
 // API ENDPOINTS
 // ============================================
 
 /**
- * Register new user
+ * Register new user - WITH SECURITY VALIDATIONS
  * Server stores: username, password hash, PUBLIC keys only
  */
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', registerLimiter, async (req, res) => {
   try {
     const { username, password, identityKey, signedPreKey, oneTimePreKeys } = req.body;
 
-    // Validate input
-    if (!username || !password || !identityKey || !signedPreKey || !oneTimePreKeys) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    // Validate username
+    const usernameValidation = validateUsername(username);
+    if (!usernameValidation.valid) {
+      return res.status(400).json({ error: usernameValidation.error });
+    }
+    const cleanUsername = usernameValidation.value;
+
+    // Validate password strength
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ error: passwordValidation.error });
     }
 
-    // Check if user exists
-    const existingUser = await User.findOne({ username });
+    // Validate required encryption keys
+    if (!identityKey || !signedPreKey || !oneTimePreKeys) {
+      return res.status(400).json({ error: 'Missing encryption keys' });
+    }
+
+    // Check if user exists (case-insensitive)
+    const existingUser = await User.findOne({ 
+      username: { $regex: new RegExp(`^${cleanUsername}$`, 'i') }
+    });
     if (existingUser) {
       return res.status(409).json({ error: 'Username already exists' });
     }
 
-    // Hash password
+    // Hash password with bcrypt (cost factor 10)
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user with sanitized username
     const user = new User({
-      username,
+      username: cleanUsername,
       passwordHash,
       identityKey,
       signedPreKey,
@@ -142,12 +356,14 @@ app.post('/api/register', async (req, res) => {
     await user.save();
 
     // Generate JWT
-    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ username: cleanUsername }, EFFECTIVE_JWT_SECRET, { expiresIn: '7d' });
+
+    console.log(`✅ New user registered: ${cleanUsername}`);
 
     res.status(201).json({
       message: 'User registered successfully',
       token,
-      username
+      username: cleanUsername
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -156,19 +372,32 @@ app.post('/api/register', async (req, res) => {
 });
 
 /**
- * Login
+ * Login - WITH RATE LIMITING & VALIDATION
  */
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', loginLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    const user = await User.findOne({ username });
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    // Validate inputs
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password required' });
     }
 
-    const validPassword = await bcrypt.compare(password, user.passwordHash);
-    if (!validPassword) {
+    // Sanitize username
+    const cleanUsername = validator.trim(username);
+
+    // Find user (case-insensitive)
+    const user = await User.findOne({ 
+      username: { $regex: new RegExp(`^${cleanUsername}$`, 'i') }
+    });
+
+    // Always hash password even if user doesn't exist (prevent timing attacks)
+    const hash = user ? user.passwordHash : await bcrypt.hash('dummy-password', 10);
+    const validPassword = await bcrypt.compare(password, hash);
+
+    // Check both user existence and password validity
+    if (!user || !validPassword) {
+      // Same error message for security (don't reveal if username exists)
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -176,12 +405,15 @@ app.post('/api/login', async (req, res) => {
     user.lastSeen = new Date();
     await user.save();
 
-    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '7d' });
+    // Generate JWT
+    const token = jwt.sign({ username: user.username }, EFFECTIVE_JWT_SECRET, { expiresIn: '7d' });
+
+    console.log(`✅ User logged in: ${user.username}`);
 
     res.json({
       message: 'Login successful',
       token,
-      username
+      username: user.username
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -427,7 +659,7 @@ wss.on('connection', (ws) => {
       switch (message.type) {
         case 'authenticate':
           // Verify JWT
-          jwt.verify(message.token, JWT_SECRET, (err, user) => {
+          jwt.verify(message.token, EFFECTIVE_JWT_SECRET, (err, user) => {
             if (err) {
               ws.send(JSON.stringify({ type: 'error', message: 'Authentication failed' }));
               ws.close();
