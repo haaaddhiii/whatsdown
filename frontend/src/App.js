@@ -60,6 +60,7 @@ function App() {
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const selectedContactRef = useRef(null);
 
   // Auto-scroll to bottom when messages change (only if already near bottom)
   useEffect(() => {
@@ -131,7 +132,7 @@ function App() {
         encryptedMessage.encryptedContent,
         encryptedMessage.iv,
         currentUser,
-        encryptedMessage.from
+        encryptedMessage.from === currentUser ? encryptedMessage.to : encryptedMessage.from
       );
 
       const newMessage = {
@@ -144,12 +145,21 @@ function App() {
         mediaUrl: encryptedMessage.mediaUrl
       };
 
-      // Only add to messages if this chat is currently open
+      // Add to messages if this chat is currently open
       setMessages(prev => {
-        // Check if this message belongs to the current conversation
-        const isCurrentChat = 
-          (newMessage.from === selectedContact?.username) || 
-          (newMessage.to === selectedContact?.username);
+        // Check if message already exists (prevent duplicates)
+        const exists = prev.some(msg => msg.id === newMessage.id);
+        if (exists) {
+          return prev; // Already have this message
+        }
+
+        // Get the other user in this conversation
+        const otherUser = encryptedMessage.from === currentUser 
+          ? encryptedMessage.to 
+          : encryptedMessage.from;
+        
+        // Check if this message belongs to the current conversation using ref
+        const isCurrentChat = selectedContactRef.current?.username === otherUser;
         
         if (isCurrentChat) {
           return [...prev, newMessage];
@@ -159,7 +169,7 @@ function App() {
     } catch (error) {
       console.error('Failed to decrypt message:', error);
     }
-  }, [currentUser, selectedContact]);
+  }, [currentUser]);
 
   const updateContactStatus = useCallback((username, status) => {
     setContacts(prev => prev.map(contact => 
@@ -365,6 +375,7 @@ function App() {
     setCurrentUser(null);
     setContacts([]);
     setSelectedContact(null);
+    selectedContactRef.current = null; // Clear ref
     setMessages([]);
     setCurrentView('login');
     
@@ -404,6 +415,7 @@ function App() {
   const startChat = async (contact) => {
     try {
       setSelectedContact(contact);
+      selectedContactRef.current = contact; // Keep ref in sync
       setSearchResults([]);
       setSearchQuery('');
       
@@ -503,15 +515,8 @@ function App() {
 
       if (response.ok) {
         const data = await response.json();
-        // Add to local messages with delivery status
-        setMessages(prev => [...prev, {
-          id: data.messageId,
-          from: currentUser,
-          text: messageInput,
-          timestamp: new Date(),
-          delivered: data.delivered,
-          read: false
-        }]);
+        // Don't add locally - WebSocket will send it back
+        // This prevents duplicate messages
         setMessageInput('');
       }
     } catch (error) {
@@ -731,7 +736,10 @@ function App() {
               <div className="chat-header">
                 <button 
                   className="back-button" 
-                  onClick={() => setSelectedContact(null)}
+                  onClick={() => {
+                    setSelectedContact(null);
+                    selectedContactRef.current = null; // Clear ref when going back
+                  }}
                   style={{ 
                     background: 'none', 
                     border: 'none', 
