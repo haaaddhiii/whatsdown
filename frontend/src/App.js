@@ -162,8 +162,13 @@ function App() {
         const isCurrentChat = selectedContactRef.current?.username === otherUser;
         
         if (isCurrentChat) {
-          return [...prev, newMessage];
+          // Remove any temp messages with same text (optimistic UI cleanup)
+          const filtered = prev.filter(msg => 
+            !(msg.sending && msg.text === newMessage.text && msg.from === newMessage.from)
+          );
+          return [...filtered, newMessage];
         }
+        
         return prev;
       });
     } catch (error) {
@@ -491,12 +496,28 @@ function App() {
       // Stop typing indicator
       sendTypingIndicator(false);
       
+      const messageText = messageInput;
+      const messageId = `temp-${Date.now()}`; // Temporary ID
+      
       // Encrypt message using simple crypto
       const encrypted = await crypto.encrypt(
-        messageInput,
+        messageText,
         currentUser,
         selectedContact.username
       );
+
+      // Optimistically add message to UI immediately
+      const tempMessage = {
+        id: messageId,
+        from: currentUser,
+        to: selectedContact.username,
+        text: messageText,
+        timestamp: new Date(),
+        sending: true // Mark as sending
+      };
+      
+      setMessages(prev => [...prev, tempMessage]);
+      setMessageInput(''); // Clear input immediately
 
       // Send to server
       const response = await fetch(`${API_URL}/api/messages/send`, {
@@ -515,9 +536,17 @@ function App() {
 
       if (response.ok) {
         const data = await response.json();
-        // Don't add locally - WebSocket will send it back
-        // This prevents duplicate messages
-        setMessageInput('');
+        
+        // Replace temp message with real one from server
+        setMessages(prev => prev.map(msg => 
+          msg.id === messageId 
+            ? { ...msg, id: data.messageId, sending: false }
+            : msg
+        ));
+      } else {
+        // Remove temp message on failure
+        setMessages(prev => prev.filter(msg => msg.id !== messageId));
+        alert('Failed to send message');
       }
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -763,8 +792,8 @@ function App() {
               <div className="messages-container" ref={messagesContainerRef}>
                 {messages.map((msg, index) => (
                   <div
-                    key={index}
-                    className={`message ${msg.from === currentUser ? 'sent' : 'received'}`}
+                    key={msg.id || index}
+                    className={`message ${msg.from === currentUser ? 'sent' : 'received'} ${msg.sending ? 'sending' : ''}`}
                   >
                     <div className="message-content">
                       {msg.text}
@@ -778,7 +807,7 @@ function App() {
                       {msg.timestamp.toLocaleTimeString()}
                       {msg.from === currentUser && (
                         <span className="message-status">
-                          {msg.read ? ' ✓✓' : msg.delivered ? ' ✓✓' : ' ✓'}
+                          {msg.sending ? ' ⏱️' : msg.read ? ' ✓✓' : msg.delivered ? ' ✓✓' : ' ✓'}
                         </span>
                       )}
                     </div>
