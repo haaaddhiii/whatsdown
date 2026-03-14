@@ -120,6 +120,12 @@ function App() {
     }
   }, []);
 
+  // CRITICAL: Keep selectedContactRef in sync with selectedContact state
+  useEffect(() => {
+    selectedContactRef.current = selectedContact;
+    console.log('📌 Selected contact ref updated:', selectedContact?.username || 'none');
+  }, [selectedContact]);
+
   // Define callback functions BEFORE useEffect hooks
   const handleNewMessage = useCallback(async (encryptedMessage) => {
     try {
@@ -396,7 +402,7 @@ function App() {
     setCurrentUser(null);
     setContacts([]);
     setSelectedContact(null);
-    selectedContactRef.current = null; // Clear ref
+    // Ref will be cleared automatically by useEffect
     setMessages([]);
     setCurrentView('login');
     
@@ -436,7 +442,7 @@ function App() {
   const startChat = async (contact) => {
     try {
       setSelectedContact(contact);
-      selectedContactRef.current = contact; // Keep ref in sync
+      // Ref will be synced automatically by useEffect
       setSearchResults([]);
       setSearchQuery('');
       
@@ -783,7 +789,7 @@ function App() {
                   className="back-button" 
                   onClick={() => {
                     setSelectedContact(null);
-                    selectedContactRef.current = null; // Clear ref when going back
+                    // Ref will be cleared automatically by useEffect
                   }}
                   style={{ 
                     background: 'none', 
