@@ -127,6 +127,13 @@ function App() {
       
       const crypto = cryptoRef.current;
       
+      console.log('🔔 New message received:', {
+        from: encryptedMessage.from,
+        to: encryptedMessage.to,
+        currentUser,
+        currentlySelectedContact: selectedContactRef.current?.username
+      });
+      
       // Decrypt message using simple crypto
       const plaintext = await crypto.decrypt(
         encryptedMessage.encryptedContent,
@@ -150,6 +157,7 @@ function App() {
         // Check if message already exists (prevent duplicates)
         const exists = prev.some(msg => msg.id === newMessage.id);
         if (exists) {
+          console.log('⚠️ Duplicate message, skipping');
           return prev; // Already have this message
         }
 
@@ -158,10 +166,17 @@ function App() {
           ? encryptedMessage.to 
           : encryptedMessage.from;
         
+        console.log('🔍 Checking if message belongs to current chat:', {
+          otherUser,
+          selectedContact: selectedContactRef.current?.username,
+          match: selectedContactRef.current?.username === otherUser
+        });
+        
         // Check if this message belongs to the current conversation using ref
         const isCurrentChat = selectedContactRef.current?.username === otherUser;
         
         if (isCurrentChat) {
+          console.log('✅ Adding message to current chat');
           // Remove any temp messages with same text (optimistic UI cleanup)
           const filtered = prev.filter(msg => 
             !(msg.sending && msg.text === newMessage.text && msg.from === newMessage.from)
@@ -169,6 +184,7 @@ function App() {
           return [...filtered, newMessage];
         }
         
+        console.log('❌ Message not for current chat, ignoring');
         return prev;
       });
     } catch (error) {
